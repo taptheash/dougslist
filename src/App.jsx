@@ -1273,6 +1273,7 @@ export default function App() {
   const [manualItems, setManualItems] = useState([]);            // freeform grocery items
   const [removedKeys, setRemovedKeys] = useState(new Set());
   const [manualInput, setManualInput] = useState("");
+  const [manualQty, setManualQty] = useState(1);
   const [editingKey, setEditingKey] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [view, setView] = useState("recipes");
@@ -1285,6 +1286,7 @@ export default function App() {
   const [targetItems, setTargetItems] = useState([]);
   const [targetChecked, setTargetChecked] = useState(new Set());
   const [targetInput, setTargetInput] = useState("");
+  const [targetQty, setTargetQty] = useState(1);
   const [targetCountdown, setTargetCountdown] = useState(null);
   const targetTimerRef = useRef(null);
   const targetResetAtRef = useRef(null);
@@ -1292,6 +1294,7 @@ export default function App() {
   const [lowesItems, setLowesItems] = useState([]);
   const [lowesChecked, setLowesChecked] = useState(new Set());
   const [lowesInput, setLowesInput] = useState("");
+  const [lowesQty, setLowesQty] = useState(1);
   const [lowesCountdown, setLowesCountdown] = useState(null);
   const lowesTimerRef = useRef(null);
   const lowesResetAtRef = useRef(null);
@@ -1452,11 +1455,13 @@ export default function App() {
 
   const addTargetItem = () => {
     if (!targetInput.trim()) return;
-    const item = { key: `t${Date.now()}`, text: targetInput.trim(), category: classifyTarget(targetInput.trim()) };
+    const text = targetQty > 1 ? `${targetQty} ${targetInput.trim()}` : targetInput.trim();
+    const item = { key: `t${Date.now()}`, text, category: classifyTarget(targetInput.trim()) };
     const updated = [...targetItems, item];
     setTargetItems(updated);
     setDoc(doc(db, "app", "target"), { items: updated, checked: [...targetChecked] }, { merge: true });
     setTargetInput("");
+    setTargetQty(1);
   };
 
   const toggleTargetItem = (key) => {
@@ -1485,11 +1490,13 @@ export default function App() {
 
   const addLowesItem = () => {
     if (!lowesInput.trim()) return;
-    const item = { key: `l${Date.now()}`, text: lowesInput.trim(), category: classifyLowes(lowesInput.trim()) };
+    const text = lowesQty > 1 ? `${lowesQty} ${lowesInput.trim()}` : lowesInput.trim();
+    const item = { key: `l${Date.now()}`, text, category: classifyLowes(lowesInput.trim()) };
     const updated = [...lowesItems, item];
     setLowesItems(updated);
     setDoc(doc(db, "app", "lowes"), { items: updated, checked: [...lowesChecked] }, { merge: true });
     setLowesInput("");
+    setLowesQty(1);
   };
 
   const toggleLowesItem = (key) => {
@@ -1646,11 +1653,13 @@ export default function App() {
 
   const addManual = () => {
     if (!manualInput.trim()) return;
-    const item = { key:`m${Date.now()}`, text:manualInput.trim(), recipe:"Added manually", manual:true };
+    const text = manualQty > 1 ? `${manualQty} ${manualInput.trim()}` : manualInput.trim();
+    const item = { key:`m${Date.now()}`, text, recipe:"Added manually", manual:true };
     const updated = [...manualItems, item];
     setManualItems(updated);
     saveShoppingState({ manualItems: updated });
     setManualInput("");
+    setManualQty(1);
   };
 
   const handleImport = async () => {
@@ -1706,7 +1715,7 @@ export default function App() {
     <div style={{fontFamily:font,background:cream,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:darkBrown}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:32,marginBottom:12}}>📖</div>
-        <div style={{fontSize:16,color:tabBg}}>Loading DougsList…</div>
+        <div style={{fontSize:16,color:tabBg}}>Loading dougslist…</div>
       </div>
     </div>
   );
@@ -1789,6 +1798,7 @@ export default function App() {
           <div>
             <div style={{padding:"10px 16px 0"}}>
               <div style={{display:"flex",gap:8}}>
+                <input type="number" min={1} max={99} value={manualQty} onChange={e=>setManualQty(Math.max(1,parseInt(e.target.value)||1))} style={{width:52,padding:"8px 6px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white",textAlign:"center"}}/>
                 <input value={manualInput} onChange={e=>setManualInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addManual()} placeholder="Add item to list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
                 <button onClick={addManual} style={{background:MB_RED,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
               </div>
@@ -1852,6 +1862,7 @@ export default function App() {
           <div>
             <div style={{padding:"10px 16px 0"}}>
               <div style={{display:"flex",gap:8}}>
+                <input type="number" min={1} max={99} value={targetQty} onChange={e=>setTargetQty(Math.max(1,parseInt(e.target.value)||1))} style={{width:52,padding:"8px 6px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white",textAlign:"center"}}/>
                 <input value={targetInput} onChange={e=>setTargetInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addTargetItem()} placeholder="Add item to Target list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
                 <button onClick={addTargetItem} style={{background:TARGET_RED,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
               </div>
@@ -1876,6 +1887,7 @@ export default function App() {
           <div>
             <div style={{padding:"10px 16px 0"}}>
               <div style={{display:"flex",gap:8}}>
+                <input type="number" min={1} max={99} value={lowesQty} onChange={e=>setLowesQty(Math.max(1,parseInt(e.target.value)||1))} style={{width:52,padding:"8px 6px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white",textAlign:"center"}}/>
                 <input value={lowesInput} onChange={e=>setLowesInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addLowesItem()} placeholder="Add item to Lowe's list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
                 <button onClick={addLowesItem} style={{background:LOWES_BLUE,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
               </div>
@@ -1906,7 +1918,7 @@ export default function App() {
     return (
       <div style={{fontFamily:font,background:cream,minHeight:"100vh",color:darkBrown,paddingBottom:40}}>
         <div style={{background:darkBrown,padding:"14px 16px",color:cream}}>
-          <p style={{fontSize:22,fontWeight:500,margin:0,color:cream}}>DougsList</p>
+          <p style={{fontSize:22,fontWeight:500,margin:0,color:cream}}>dougslist</p>
         </div>
         <div style={{padding:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -1999,7 +2011,7 @@ export default function App() {
   return (
     <div style={{fontFamily:font,background:cream,minHeight:"100vh",color:darkBrown,paddingBottom:40}}>
       <div style={{background:darkBrown,padding:"14px 16px 0",color:cream}}>
-        <p style={{fontSize:22,fontWeight:500,margin:0,color:cream,letterSpacing:1}}>DougsList</p>
+        <p style={{fontSize:22,fontWeight:500,margin:0,color:cream,letterSpacing:1}}>dougslist</p>
         <div style={{display:"flex",gap:6,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
           <div style={{position:"relative"}}>
             <button onClick={()=>{setStoreTab("mb");setView("shopping");}}
