@@ -1624,7 +1624,7 @@ export default function App() {
     <div style={{fontFamily:font,background:cream,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:darkBrown}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:32,marginBottom:12}}>📖</div>
-        <div style={{fontSize:16,color:tabBg}}>Loading My Hub…</div>
+        <div style={{fontSize:16,color:tabBg}}>Loading DougsList…</div>
       </div>
     </div>
   );
@@ -1822,7 +1822,7 @@ export default function App() {
     return (
       <div style={{fontFamily:font,background:cream,minHeight:"100vh",color:darkBrown,paddingBottom:40}}>
         <div style={{background:darkBrown,padding:"14px 16px",color:cream}}>
-          <p style={{fontSize:22,fontWeight:500,margin:0,color:cream}}>My Hub</p>
+          <p style={{fontSize:22,fontWeight:500,margin:0,color:cream}}>DougsList</p>
         </div>
         <div style={{padding:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -1915,20 +1915,28 @@ export default function App() {
   return (
     <div style={{fontFamily:font,background:cream,minHeight:"100vh",color:darkBrown,paddingBottom:40}}>
       <div style={{background:darkBrown,padding:"14px 16px 0",color:cream}}>
-        <p style={{fontSize:22,fontWeight:500,margin:0,color:cream,letterSpacing:1}}>My Hub</p>
-        <p style={{fontSize:12,color:kraft,margin:"2px 0 10px",fontStyle:"italic"}}>My Personal Recipe Collection</p>
+        <p style={{fontSize:22,fontWeight:500,margin:0,color:cream,letterSpacing:1}}>DougsList</p>
         <div style={{display:"flex",gap:6,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
           <div style={{position:"relative"}}>
-            <button onClick={()=>{setStoreTab("mb");setView("shopping");}} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:cream,fontSize:12,cursor:"pointer",fontFamily:font}}>🧺 Market Basket</button>
-            {total>0&&<span style={{position:"absolute",top:-6,right:-6,background:MB_RED,color:"white",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{total>99?"99+":total}</span>}
+            <button onClick={()=>{setStoreTab("mb");setView("shopping");}}
+              style={{padding:"6px 14px",borderRadius:8,border:"none",background:MB_RED,color:"white",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:font,letterSpacing:0.3,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>
+              🧺 Market Basket
+            </button>
+            {total>0&&<span style={{position:"absolute",top:-6,right:-6,background:"white",color:MB_RED,borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,border:`1.5px solid ${MB_RED}`}}>{total>99?"99+":total}</span>}
           </div>
           <div style={{position:"relative"}}>
-            <button onClick={()=>{setStoreTab("target");setView("shopping");}} style={{padding:"6px 14px",borderRadius:16,border:"1.5px solid #cc0000",background:"transparent",color:"#ff9999",fontSize:12,cursor:"pointer",fontFamily:font}}>🎯 Target</button>
-            {targetItems.length>0&&<span style={{position:"absolute",top:-6,right:-6,background:"#cc0000",color:"white",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{targetItems.length>99?"99+":targetItems.length}</span>}
+            <button onClick={()=>{setStoreTab("target");setView("shopping");}}
+              style={{padding:"6px 14px",borderRadius:8,border:"none",background:"#cc0000",color:"white",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:font,letterSpacing:0.3,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>
+              🎯 Target
+            </button>
+            {targetItems.length>0&&<span style={{position:"absolute",top:-6,right:-6,background:"white",color:"#cc0000",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,border:"1.5px solid #cc0000"}}>{targetItems.length>99?"99+":targetItems.length}</span>}
           </div>
           <div style={{position:"relative"}}>
-            <button onClick={()=>{setStoreTab("lowes");setView("shopping");}} style={{padding:"6px 14px",borderRadius:16,border:"1.5px solid #004990",background:"transparent",color:"#99bbdd",fontSize:12,cursor:"pointer",fontFamily:font}}>🔨 Lowe's</button>
-            {lowesItems.length>0&&<span style={{position:"absolute",top:-6,right:-6,background:"#004990",color:"white",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{lowesItems.length>99?"99+":lowesItems.length}</span>}
+            <button onClick={()=>{setStoreTab("lowes");setView("shopping");}}
+              style={{padding:"6px 14px",borderRadius:8,border:"none",background:"#004990",color:"white",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:font,letterSpacing:0.3,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>
+              🔨 Lowe's
+            </button>
+            {lowesItems.length>0&&<span style={{position:"absolute",top:-6,right:-6,background:"white",color:"#004990",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,border:"1.5px solid #004990"}}>{lowesItems.length>99?"99+":lowesItems.length}</span>}
           </div>
           <button onClick={()=>setShowImport(v=>!v)} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:kraft,fontSize:12,cursor:"pointer",fontFamily:font}}>+ Import Recipe</button>
         </div>
