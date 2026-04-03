@@ -134,6 +134,7 @@ const classifyIngredient = (ing) => {
   const lower = ing.toLowerCase();
   if (/shrimp|haddock|salmon|tuna|cod|tilapia|crab|lobster|scallop|clam|mussel|oyster|anchovy|swordfish|halibut|flounder|fish fillet/.test(lower)) return "seafood";
   if (/broth|stock|clam juice|bone broth/.test(lower)) return "eggs";
+  if (/\beggs?\b|\bbacon\b/.test(lower)) return "eggs";
   if (/tomato paste|tomato sauce/.test(lower)) return "condiments";
   if (/frozen|dumpling/.test(lower)) return "frozen1";
   if (/pie crust|pie shell/.test(lower)) return "dairy";
