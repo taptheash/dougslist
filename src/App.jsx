@@ -1,18 +1,18 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { db } from "./firebase";
+import {
+  collection, doc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch
+} from "firebase/firestore";
 
 // --- Timer helpers ---
 const extractTimerSeconds = (text) => {
   const t = text.toLowerCase();
   let total = 0;
-  // "X to Y minutes" or "X-Y minutes" — use the higher value
   const rangeMin = t.match(/(\d+)\s*(?:to|-)\s*(\d+)\s*minutes?/);
   if (rangeMin) { total += parseInt(rangeMin[2]) * 60; }
-  // "X to Y hours"
   const rangeHr = t.match(/(\d+)\s*(?:to|-)\s*(\d+)\s*hours?/);
   if (rangeHr) { total += parseInt(rangeHr[2]) * 3600; }
   if (rangeMin || rangeHr) return total || null;
-
-  // Single values
   const hrs = t.match(/(\d+(?:\.\d+)?)\s*hours?/);
   const mins = t.match(/(\d+(?:\.\d+)?)\s*minutes?/);
   const secs = t.match(/(\d+)\s*seconds?/);
@@ -35,40 +35,25 @@ function StepTimer({ seconds, kraft, tabBg, cream, darkBrown }) {
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
   const intervalRef = useRef(null);
-
-  useEffect(() => {
-    setRemaining(seconds); setRunning(false); setDone(false);
-  }, [seconds]);
-
+  useEffect(() => { setRemaining(seconds); setRunning(false); setDone(false); }, [seconds]);
   useEffect(() => {
     if (running) {
       intervalRef.current = setInterval(() => {
         setRemaining(r => {
-          if (r <= 1) {
-            clearInterval(intervalRef.current);
-            setRunning(false);
-            setDone(true);
-            return 0;
-          }
+          if (r <= 1) { clearInterval(intervalRef.current); setRunning(false); setDone(true); return 0; }
           return r - 1;
         });
       }, 1000);
-    } else {
-      clearInterval(intervalRef.current);
-    }
+    } else { clearInterval(intervalRef.current); }
     return () => clearInterval(intervalRef.current);
   }, [running]);
-
   const pct = Math.round(((seconds - remaining) / seconds) * 100);
   const bg = done ? "#22c55e" : running ? tabBg : "#e8d5a3";
   const fg = done ? "white" : darkBrown;
-
   const reset = (e) => { e.stopPropagation(); setRemaining(seconds); setRunning(false); setDone(false); };
-
   return (
     <div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:6,background:bg,borderRadius:20,padding:"4px 10px 4px 6px",cursor:"pointer",transition:"background 0.3s",border:`1.5px solid ${done?"#22c55e":kraft}`}}
       onClick={e=>{e.stopPropagation(); if(done){reset(e);}else{setRunning(r=>!r);}}}>
-      {/* arc progress ring */}
       <svg width="22" height="22" viewBox="0 0 22 22" style={{flexShrink:0}}>
         <circle cx="11" cy="11" r="9" fill="none" stroke={done?"#bbf7d0":"#c8a96e"} strokeWidth="2.5"/>
         {!done && <circle cx="11" cy="11" r="9" fill="none" stroke={running?"#b5924a":"#8a6030"}
@@ -84,9 +69,7 @@ function StepTimer({ seconds, kraft, tabBg, cream, darkBrown }) {
       <span style={{fontSize:13,fontWeight:600,color:fg,fontVariantNumeric:"tabular-nums",minWidth:38,textAlign:"center"}}>
         {done ? "Done!" : fmtTime(remaining)}
       </span>
-      {(running || done) && (
-        <span onClick={reset} style={{fontSize:10,color:done?"white":"#8a6030",marginLeft:2,opacity:0.7}}>↺</span>
-      )}
+      {(running || done) && <span onClick={reset} style={{fontSize:10,color:done?"white":"#8a6030",marginLeft:2,opacity:0.7}}>↺</span>}
     </div>
   );
 }
@@ -173,7 +156,6 @@ const classifyIngredient = (ing) => {
 
 const PREP_STRIP = /,?\s*(diced|chopped|minced|sliced|crushed|peeled|grated|shredded|julienned|halved|quartered|cubed|trimmed|thawed|drained|rinsed|beaten|softened|melted|room temperature|coarsely|finely|thinly|roughly|freshly|packed|heaping|level|divided|optional|to taste|for serving|for garnish|for frying|as needed|or more|or less|hand-crushed|torn|zested and juiced|juiced|zested|deveined|pounded|cut into cubes|separated|crumbled|peeled and cubed|peeled and diced|cooked and shredded|thinly sliced|roughly chopped|finely chopped|lightly beaten|freshly grated|freshly ground)[^,]*/gi;
 const COOK_WORDS = /\b(diced|chopped|minced|sliced|crushed|peeled|grated|shredded|cubed|trimmed|beaten|softened|melted|thawed|drained|rinsed|coarsely|finely|thinly|roughly|freshly|packed|heaping|divided|optional)\b/gi;
-
 const SPICES_AND_PANTRY = ["salt","pepper","black pepper","white pepper","red pepper flakes","crushed red pepper","cayenne","chili powder","cumin","paprika","smoked paprika","oregano","italian seasoning","garlic powder","onion powder","cinnamon","turmeric","nutmeg","sage","thyme","rosemary","bay leaf","coriander","allspice","cardamom","fennel","dill","curry powder","garam masala","old bay","baking soda","baking powder","cornstarch","yeast","vanilla extract","cocoa powder","sugar","brown sugar","powdered sugar","kosher salt","sea salt","flour","olive oil","vegetable oil","canola oil","coconut oil","sesame oil","garlic oil","soy sauce","worcestershire","fish sauce","hot sauce","sriracha","honey","maple syrup","vinegar","balsamic","apple cider vinegar","red wine vinegar","white wine vinegar","miso paste","tomato paste","chipotle","italian herbs","breadcrumbs","panko","dijon mustard","dijon"];
 
 const MEAT_CONVERSIONS = [
@@ -322,7 +304,7 @@ const parseRecipes = (text) => {
     }
     if (!ingredients.length && !instructions.length) return null;
     const validCat = CATEGORIES.includes(category)?category:"Other";
-    return { id:i, title, category:validCat, baseServings:servings, servings, ingredients, instructions, favorite:false };
+    return { id:`seed_${i}`, title, category:validCat, baseServings:servings, servings, ingredients, instructions, favorite:false };
   }).filter(Boolean);
 };
 
@@ -1203,7 +1185,12 @@ Instructions:
 5. Rest well before slicing thin.`;
 
 export default function App() {
-  const [recipes, setRecipes] = useState(() => parseRecipes(SAMPLE));
+  const MB_RED="#c8102e",MB_DARK="#a00d24",cream="#fdf6e3",kraft="#c8a96e",darkBrown="#3d2b1a",tabBg="#b5924a",ringBg="#e8d5a3",font="'Trebuchet MS', Helvetica, sans-serif";
+
+  // --- State ---
+  const [recipes, setRecipes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [seeded, setSeeded] = useState(false);
   const [activeTab, setActiveTab] = useState("All");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -1212,27 +1199,69 @@ export default function App() {
   const [editingRecipeId, setEditingRecipeId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [checkedIds, setCheckedIds] = useState(new Set());
-  const [checkedItems, setCheckedItems] = useState(new Set());
-  const [manualItems, setManualItems] = useState([]);
-  const [manualInput, setManualInput] = useState("");
+  // Shopping state - persisted in Firestore
+  const [checkedIds, setCheckedIds] = useState(new Set());       // recipe IDs checked for shopping
+  const [checkedItems, setCheckedItems] = useState(new Set());   // individual item keys checked off
+  const [manualItems, setManualItems] = useState([]);            // freeform grocery items
   const [removedKeys, setRemovedKeys] = useState(new Set());
+  const [manualInput, setManualInput] = useState("");
   const [editingKey, setEditingKey] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [view, setView] = useState("recipes");
   const [countdown, setCountdown] = useState(null);
   const timerRef = useRef(null);
+  const shoppingLoaded = useRef(false);
 
-  const filtered = useMemo(() => {
-    let list = recipes;
-    if (activeTab==="Favorites") list=list.filter(r=>r.favorite);
-    else if (activeTab!=="All") list=list.filter(r=>r.category===activeTab);
-    if (search.trim()) { const q=search.toLowerCase(); list=list.filter(r=>r.title.toLowerCase().includes(q)||r.ingredients.some(i=>i.toLowerCase().includes(q))); }
-    return list;
-  }, [recipes, activeTab, search]);
+  // --- Load recipes from Firestore, seed if empty ---
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "recipes"), async (snap) => {
+      if (snap.empty && !seeded) {
+        setSeeded(true);
+        const seedRecipes = parseRecipes(SAMPLE);
+        const batch = writeBatch(db);
+        seedRecipes.forEach(r => {
+          batch.set(doc(db, "recipes", r.id), {
+            title: r.title, category: r.category, baseServings: r.baseServings,
+            servings: r.servings, ingredients: r.ingredients, instructions: r.instructions, favorite: false
+          });
+        });
+        await batch.commit();
+      } else {
+        const loaded = snap.docs.map(d => ({ id: d.id, ...d.data(), servings: d.data().servings || d.data().baseServings }));
+        setRecipes(loaded);
+        setLoading(false);
+      }
+    });
+    return () => unsub();
+  }, []);
 
-  const selected = recipes.find(r=>r.id===selectedId);
+  // --- Load shopping state from Firestore ---
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "app", "shopping"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setCheckedIds(new Set(data.checkedIds || []));
+        setCheckedItems(new Set(data.checkedItems || []));
+        setManualItems(data.manualItems || []);
+        setRemovedKeys(new Set(data.removedKeys || []));
+        if (data.resetAt) {
+          const rem = data.resetAt - Date.now();
+          if (rem > 0) {
+            // auto-reset timer already running
+          }
+        }
+      }
+      shoppingLoaded.current = true;
+    });
+    return () => unsub();
+  }, []);
 
+  // --- Persist shopping state to Firestore ---
+  const saveShoppingState = (updates) => {
+    setDoc(doc(db, "app", "shopping"), updates, { merge: true });
+  };
+
+  // --- Computed shopping items ---
   const allShoppingItems = useMemo(() => {
     const items = [];
     recipes.filter(r=>checkedIds.has(r.id)).forEach(r => {
@@ -1266,11 +1295,13 @@ export default function App() {
 
   const total=allShoppingItems.length, checked=checkedItems.size, pct=total>0?Math.round((checked/total)*100):0;
   const activeSections=STORE_SECTIONS.filter(s=>grouped[s.key]?.length>0);
+  const barColor=pct===100?"#22c55e":pct>=66?"#84cc16":"#ffe066";
 
+  // --- Auto-reset timer ---
   useEffect(() => {
     if (total>0&&checked===total) {
       if (timerRef.current) return;
-      let end=Date.now()+60*60*1000;
+      const end=Date.now()+60*60*1000;
       timerRef.current=setInterval(()=>{
         const rem=end-Date.now();
         if (rem<=0){resetShopping();return;}
@@ -1283,24 +1314,141 @@ export default function App() {
     }
   }, [checked, total]);
 
-  const resetShopping=()=>{setCheckedItems(new Set());setRemovedKeys(new Set());setEditingKey(null);if(timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}setCountdown(null);};
-  const toggleCheck=(id,e)=>{e.stopPropagation();setCheckedIds(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});};
-  const toggleFav=(id,e)=>{e&&e.stopPropagation();setRecipes(rs=>rs.map(r=>r.id===id?{...r,favorite:!r.favorite}:r));};
-  const setServings=(id,val)=>setRecipes(rs=>rs.map(r=>r.id===id?{...r,servings:Math.max(1,val)}:r));
-  const toggleItem=(key)=>setCheckedItems(prev=>{const n=new Set(prev);n.has(key)?n.delete(key):n.add(key);return n;});
-  const removeItem=(key)=>{setRemovedKeys(prev=>{const n=new Set(prev);n.add(key);return n;});setCheckedItems(prev=>{const n=new Set(prev);n.delete(key);return n;});};
-  const startEdit=(key,text,e)=>{e.stopPropagation();setEditingKey(key);setEditingText(text);};
-  const saveEdit=(key)=>{if(!editingText.trim()){setEditingKey(null);return;}setManualItems(prev=>prev.map(m=>m.key===key?{...m,text:editingText.trim()}:m));setEditingKey(null);};
-  const addManual=()=>{if(!manualInput.trim())return;setManualItems(prev=>[...prev,{key:`m${Date.now()}`,text:manualInput.trim(),recipe:"Added manually",manual:true}]);setManualInput("");};
-  const handleImport=()=>{if(!importText.trim())return;const nr=parseRecipes(importText);if(nr.length){const maxId=recipes.reduce((m,r)=>Math.max(m,r.id),0);setRecipes(rs=>[...rs,...nr.map((r,i)=>({...r,id:maxId+i+1}))]);setImportText("");setShowImport(false);}};
-  const startEditRecipe=(r)=>{setEditDraft({title:r.title,category:r.category,ingredients:r.ingredients.join("\n"),instructions:r.instructions.join("\n")});setEditingRecipeId(r.id);};
-  const saveEditRecipe=(id)=>{setRecipes(rs=>rs.map(r=>r.id!==id?r:{...r,title:editDraft.title.trim()||r.title,category:editDraft.category,ingredients:editDraft.ingredients.split("\n").map(l=>l.replace(/^[-*•]\s*/,"").trim()).filter(Boolean),instructions:editDraft.instructions.split("\n").map(l=>l.replace(/^\d+[.)]\s*/,"").trim()).filter(Boolean)}));setEditingRecipeId(null);setEditDraft(null);};
-  const cancelEditRecipe=()=>{setEditingRecipeId(null);setEditDraft(null);};
-  const deleteRecipe=(id)=>{setRecipes(rs=>rs.filter(r=>r.id!==id));setSelectedId(null);setConfirmDelete(false);};
+  // --- Handlers ---
+  const resetShopping = () => {
+    const empty = { checkedIds:[], checkedItems:[], manualItems:[], removedKeys:[] };
+    setCheckedIds(new Set()); setCheckedItems(new Set()); setManualItems([]); setRemovedKeys(new Set());
+    setEditingKey(null);
+    if (timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}
+    setCountdown(null);
+    saveShoppingState(empty);
+  };
 
-  const MB_RED="#c8102e",MB_DARK="#a00d24",cream="#fdf6e3",kraft="#c8a96e",darkBrown="#3d2b1a",tabBg="#b5924a",ringBg="#e8d5a3",font="'Trebuchet MS', Helvetica, sans-serif";
-  const barColor=pct===100?"#22c55e":pct>=66?"#84cc16":"#ffe066";
+  const toggleCheck = (id, e) => {
+    e.stopPropagation();
+    setCheckedIds(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      saveShoppingState({ checkedIds: [...n] });
+      return n;
+    });
+  };
 
+  const toggleFav = async (id, e) => {
+    e&&e.stopPropagation();
+    const r = recipes.find(r=>r.id===id);
+    if (!r) return;
+    await updateDoc(doc(db,"recipes",id), { favorite: !r.favorite });
+  };
+
+  const setServings = (id, val) => {
+    const v = Math.max(1,val);
+    setRecipes(rs=>rs.map(r=>r.id===id?{...r,servings:v}:r));
+    updateDoc(doc(db,"recipes",id), { servings: v });
+  };
+
+  const toggleItem = (key) => {
+    setCheckedItems(prev => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      saveShoppingState({ checkedItems: [...n] });
+      return n;
+    });
+  };
+
+  const removeItem = (key) => {
+    setRemovedKeys(prev => {
+      const n = new Set(prev);
+      n.add(key);
+      saveShoppingState({ removedKeys: [...n] });
+      return n;
+    });
+    setCheckedItems(prev => {
+      const n = new Set(prev);
+      n.delete(key);
+      saveShoppingState({ checkedItems: [...n] });
+      return n;
+    });
+  };
+
+  const startEdit = (key, text, e) => { e.stopPropagation(); setEditingKey(key); setEditingText(text); };
+
+  const saveEdit = (key) => {
+    if (!editingText.trim()) { setEditingKey(null); return; }
+    const updated = manualItems.map(m=>m.key===key?{...m,text:editingText.trim()}:m);
+    setManualItems(updated);
+    saveShoppingState({ manualItems: updated });
+    setEditingKey(null);
+  };
+
+  const addManual = () => {
+    if (!manualInput.trim()) return;
+    const item = { key:`m${Date.now()}`, text:manualInput.trim(), recipe:"Added manually", manual:true };
+    const updated = [...manualItems, item];
+    setManualItems(updated);
+    saveShoppingState({ manualItems: updated });
+    setManualInput("");
+  };
+
+  const handleImport = async () => {
+    if (!importText.trim()) return;
+    const nr = parseRecipes(importText);
+    if (nr.length) {
+      const batch = writeBatch(db);
+      nr.forEach((r, i) => {
+        const id = `recipe_${Date.now()}_${i}`;
+        batch.set(doc(db, "recipes", id), {
+          title: r.title, category: r.category, baseServings: r.baseServings,
+          servings: r.servings, ingredients: r.ingredients, instructions: r.instructions, favorite: false
+        });
+      });
+      await batch.commit();
+      setImportText(""); setShowImport(false);
+    }
+  };
+
+  const startEditRecipe = (r) => {
+    setEditDraft({title:r.title,category:r.category,ingredients:r.ingredients.join("\n"),instructions:r.instructions.join("\n")});
+    setEditingRecipeId(r.id);
+  };
+
+  const saveEditRecipe = async (id) => {
+    await updateDoc(doc(db,"recipes",id), {
+      title: editDraft.title.trim(),
+      category: editDraft.category,
+      ingredients: editDraft.ingredients.split("\n").map(l=>l.replace(/^[-*•]\s*/,"").trim()).filter(Boolean),
+      instructions: editDraft.instructions.split("\n").map(l=>l.replace(/^\d+[.)]\s*/,"").trim()).filter(Boolean),
+    });
+    setEditingRecipeId(null); setEditDraft(null);
+  };
+
+  const cancelEditRecipe = () => { setEditingRecipeId(null); setEditDraft(null); };
+
+  const deleteRecipe = async (id) => {
+    await deleteDoc(doc(db,"recipes",id));
+    setSelectedId(null); setConfirmDelete(false);
+  };
+
+  const filtered = useMemo(() => {
+    let list = recipes;
+    if (activeTab==="Favorites") list=list.filter(r=>r.favorite);
+    else if (activeTab!=="All") list=list.filter(r=>r.category===activeTab);
+    if (search.trim()) { const q=search.toLowerCase(); list=list.filter(r=>r.title.toLowerCase().includes(q)||r.ingredients.some(i=>i.toLowerCase().includes(q))); }
+    return list;
+  }, [recipes, activeTab, search]);
+
+  const selected = recipes.find(r=>r.id===selectedId);
+
+  if (loading) return (
+    <div style={{fontFamily:font,background:cream,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:darkBrown}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:32,marginBottom:12}}>📖</div>
+        <div style={{fontSize:16,color:tabBg}}>Loading Doug's Cookbook…</div>
+      </div>
+    </div>
+  );
+
+  // --- Shopping view ---
   if (view==="shopping") {
     return (
       <div style={{fontFamily:font,background:"#f5f5f0",minHeight:"100vh",color:"#222",paddingBottom:40}}>
@@ -1322,13 +1470,13 @@ export default function App() {
         </div>
         <div style={{padding:"10px 16px 0"}}>
           <div style={{display:"flex",gap:8}}>
-            <input value={manualInput} onChange={e=>setManualInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addManual()} placeholder="Add item manually..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
+            <input value={manualInput} onChange={e=>setManualInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addManual()} placeholder="Add item to list..." style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:14,fontFamily:font,background:"white"}}/>
             <button onClick={addManual} style={{background:MB_RED,color:"white",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",fontWeight:600,fontFamily:font}}>Add</button>
           </div>
-          {checkedIds.size>0&&<div style={{fontSize:12,color:"#888",marginTop:6,fontStyle:"italic"}}>From: {recipes.filter(r=>checkedIds.has(r.id)).map(r=>r.title).join(", ")}</div>}
+          {checkedIds.size>0&&<div style={{fontSize:12,color:"#888",marginTop:6,fontStyle:"italic"}}>Recipes: {recipes.filter(r=>checkedIds.has(r.id)).map(r=>r.title).join(", ")}</div>}
         </div>
         {total===0?(
-          <p style={{textAlign:"center",padding:"40px 20px",color:"#888",fontStyle:"italic"}}>No items yet. Check recipes or add items manually above.</p>
+          <p style={{textAlign:"center",padding:"40px 20px",color:"#888",fontStyle:"italic"}}>No items yet. Check recipes from the list or add items above.</p>
         ):(
           <div style={{padding:"8px 0"}}>
             {activeSections.map(sec=>(
@@ -1381,6 +1529,7 @@ export default function App() {
     );
   }
 
+  // --- Recipe detail view ---
   if (selected) {
     const ratio=selected.servings/selected.baseServings;
     const isEditing=editingRecipeId===selected.id;
@@ -1477,6 +1626,7 @@ export default function App() {
     );
   }
 
+  // --- Recipe list view ---
   return (
     <div style={{fontFamily:font,background:cream,minHeight:"100vh",color:darkBrown,paddingBottom:40}}>
       <div style={{background:darkBrown,padding:"14px 16px 0",color:cream}}>
@@ -1487,7 +1637,7 @@ export default function App() {
             <button onClick={()=>setView("shopping")} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:cream,fontSize:12,cursor:"pointer",fontFamily:font}}>🛒 Market Basket</button>
             {total>0&&<span style={{position:"absolute",top:-6,right:-6,background:MB_RED,color:"white",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{total>99?"99+":total}</span>}
           </div>
-          <button onClick={()=>setShowImport(v=>!v)} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:kraft,fontSize:12,cursor:"pointer",fontFamily:font}}>+ Import</button>
+          <button onClick={()=>setShowImport(v=>!v)} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:kraft,fontSize:12,cursor:"pointer",fontFamily:font}}>+ Import Recipe</button>
         </div>
         <div style={{display:"flex",overflowX:"auto",scrollbarWidth:"none"}}>
           {CATEGORIES.map(cat=>{const active=activeTab===cat;return <button key={cat} onClick={()=>setActiveTab(cat)} style={{padding:"7px 12px",fontSize:12,border:"none",cursor:"pointer",whiteSpace:"nowrap",borderRadius:"6px 6px 0 0",fontFamily:font,fontWeight:active?500:400,background:active?cream:tabBg,color:active?darkBrown:"#f5e6c8",marginRight:2}}>{cat}</button>;})}
@@ -1498,11 +1648,11 @@ export default function App() {
       </div>
       {showImport&&(
         <div style={{background:"#fffcf2",border:`1px solid ${kraft}`,borderRadius:8,margin:"10px 12px",padding:14}}>
-          <p style={{fontSize:13,color:darkBrown,marginBottom:6,fontStyle:"italic"}}>Paste recipe text below.</p>
+          <p style={{fontSize:13,color:darkBrown,marginBottom:6,fontStyle:"italic"}}>Paste recipe text below — it will be saved to your cookbook.</p>
           <textarea value={importText} onChange={e=>setImportText(e.target.value)} style={{width:"100%",height:140,border:`1px solid ${kraft}`,borderRadius:6,padding:10,fontSize:13,fontFamily:font,background:cream,color:darkBrown,resize:"vertical",boxSizing:"border-box"}} placeholder={"Recipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient\nInstructions:\n1. Step one"}/>
           <div style={{display:"flex",gap:8,marginTop:8,justifyContent:"flex-end"}}>
             <button onClick={()=>setShowImport(false)} style={{padding:"8px 14px",background:"transparent",color:darkBrown,border:`1px solid ${kraft}`,borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:font}}>Cancel</button>
-            <button onClick={handleImport} style={{padding:"8px 18px",background:darkBrown,color:cream,border:"none",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:font}}>Add Recipes</button>
+            <button onClick={handleImport} style={{padding:"8px 18px",background:darkBrown,color:cream,border:"none",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:font}}>Save to Cookbook</button>
           </div>
         </div>
       )}
