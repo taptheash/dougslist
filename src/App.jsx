@@ -1624,7 +1624,7 @@ export default function App() {
     <div style={{fontFamily:font,background:cream,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:darkBrown}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:32,marginBottom:12}}>📖</div>
-        <div style={{fontSize:16,color:tabBg}}>Loading Doug's Cookbook…</div>
+        <div style={{fontSize:16,color:tabBg}}>Loading My Hub…</div>
       </div>
     </div>
   );
@@ -1835,7 +1835,7 @@ export default function App() {
     return (
       <div style={{fontFamily:font,background:cream,minHeight:"100vh",color:darkBrown,paddingBottom:40}}>
         <div style={{background:darkBrown,padding:"14px 16px",color:cream}}>
-          <p style={{fontSize:22,fontWeight:500,margin:0,color:cream}}>Doug's Cookbook</p>
+          <p style={{fontSize:22,fontWeight:500,margin:0,color:cream}}>My Hub</p>
         </div>
         <div style={{padding:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -1928,7 +1928,7 @@ export default function App() {
   return (
     <div style={{fontFamily:font,background:cream,minHeight:"100vh",color:darkBrown,paddingBottom:40}}>
       <div style={{background:darkBrown,padding:"14px 16px 0",color:cream}}>
-        <p style={{fontSize:22,fontWeight:500,margin:0,color:cream,letterSpacing:1}}>Doug's Cookbook</p>
+        <p style={{fontSize:22,fontWeight:500,margin:0,color:cream,letterSpacing:1}}>My Hub</p>
         <p style={{fontSize:12,color:kraft,margin:"2px 0 10px",fontStyle:"italic"}}>My Personal Recipe Collection</p>
         <div style={{display:"flex",gap:6,marginBottom:10,alignItems:"center"}}>
           <div style={{position:"relative"}}>
