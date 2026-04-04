@@ -30,7 +30,20 @@ const fmtTime = (s) => {
   return `${m}:${String(sec).padStart(2,"0")}`;
 };
 
-function StepTimer({ seconds, kraft, tabBg, cream, darkBrown }) {
+// Request notification permission
+const requestNotificationPermission = async () => {
+  if ("Notification" in window && Notification.permission === "default") {
+    await Notification.requestPermission();
+  }
+};
+
+const sendNotification = (title, body) => {
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(title, { body, icon: "/favicon.ico" });
+  }
+};
+
+function StepTimer({ seconds, stepText, kraft, tabBg, cream, darkBrown }) {
   const [remaining, setRemaining] = useState(seconds);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
@@ -38,9 +51,16 @@ function StepTimer({ seconds, kraft, tabBg, cream, darkBrown }) {
   useEffect(() => { setRemaining(seconds); setRunning(false); setDone(false); }, [seconds]);
   useEffect(() => {
     if (running) {
+      requestNotificationPermission();
       intervalRef.current = setInterval(() => {
         setRemaining(r => {
-          if (r <= 1) { clearInterval(intervalRef.current); setRunning(false); setDone(true); return 0; }
+          if (r <= 1) {
+            clearInterval(intervalRef.current);
+            setRunning(false);
+            setDone(true);
+            sendNotification("⏱️ Timer Done!", stepText ? `Step complete: ${stepText.slice(0,60)}` : "Your cooking timer is done!");
+            return 0;
+          }
           return r - 1;
         });
       }, 1000);
@@ -1279,6 +1299,25 @@ export default function App() {
   const [view, setView] = useState("recipes");
   const [countdown, setCountdown] = useState(null);
   const timerRef = useRef(null);
+  const [wakeLock, setWakeLock] = useState(null);
+  const [wakeActive, setWakeActive] = useState(false);
+
+  const toggleWakeLock = async () => {
+    if (wakeActive && wakeLock) {
+      await wakeLock.release();
+      setWakeLock(null);
+      setWakeActive(false);
+    } else {
+      try {
+        if ("wakeLock" in navigator) {
+          const lock = await navigator.wakeLock.request("screen");
+          setWakeLock(lock);
+          setWakeActive(true);
+          lock.addEventListener("release", () => { setWakeActive(false); setWakeLock(null); });
+        }
+      } catch(e) { console.log("Wake lock failed:", e); }
+    }
+  };
   const shoppingLoaded = useRef(false);
   // Store tab: "mb" | "target" | "lowes"
   const [storeTab, setStoreTab] = useState("mb");
@@ -1922,7 +1961,7 @@ export default function App() {
         </div>
         <div style={{padding:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <button style={{background:"none",border:"none",color:tabBg,cursor:"pointer",fontSize:14,padding:0,fontFamily:font}} onClick={()=>{setSelectedId(null);cancelEditRecipe();setConfirmDelete(false);}}>← Back</button>
+            <button style={{background:"none",border:"none",color:tabBg,cursor:"pointer",fontSize:14,padding:0,fontFamily:font}} onClick={()=>{setSelectedId(null);cancelEditRecipe();setConfirmDelete(false);if(wakeLock){wakeLock.release();}setWakeActive(false);setWakeLock(null);}}>← Back</button>
             {!isEditing&&(
               <div style={{display:"flex",gap:8}}>
                 {confirmDelete?(
@@ -1974,7 +2013,13 @@ export default function App() {
                   <h2 style={{fontSize:22,fontWeight:500,margin:"0 0 4px"}}>{selected.title}</h2>
                   <p style={{fontSize:12,color:"#8a6030",fontStyle:"italic",marginBottom:16}}>{selected.category}</p>
                 </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <button onClick={toggleWakeLock} title={wakeActive?"Screen stay-on: ON":"Screen stay-on: OFF"}
+                  style={{background:wakeActive?"#22c55e":"transparent",border:`1.5px solid ${wakeActive?"#22c55e":kraft}`,borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:600,color:wakeActive?"white":tabBg,cursor:"pointer",fontFamily:font}}>
+                  {wakeActive?"☀️ On":"☀️ Off"}
+                </button>
                 <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18}} onClick={()=>toggleFav(selected.id)}>{selected.favorite?"★":"☆"}</button>
+              </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:12,background:ringBg,borderRadius:8,padding:"10px 14px",marginBottom:20}}>
                 <span style={{fontSize:13,fontWeight:500,minWidth:60}}>Servings</span>
@@ -1994,7 +2039,7 @@ export default function App() {
                       <div style={{minWidth:22,height:22,borderRadius:"50%",background:tabBg,color:cream,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:500,marginTop:2,flexShrink:0}}>{i+1}</div>
                       <div style={{flex:1}}>
                         <div>{step}</div>
-                        {secs && <StepTimer key={`${selected.id}-${i}`} seconds={secs} kraft={kraft} tabBg={tabBg} cream={cream} darkBrown={darkBrown}/>}
+                        {secs && <StepTimer key={`${selected.id}-${i}`} seconds={secs} stepText={step} kraft={kraft} tabBg={tabBg} cream={cream} darkBrown={darkBrown}/>}
                       </div>
                     </div>
                   );
