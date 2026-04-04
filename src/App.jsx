@@ -1324,6 +1324,10 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [showPhotoImport, setShowPhotoImport] = useState(false);
+  const [photoImporting, setPhotoImporting] = useState(false);
+  const [photoError, setPhotoError] = useState(null);
+  const photoInputRef = useRef(null);
   const [editingRecipeId, setEditingRecipeId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -1761,6 +1765,77 @@ export default function App() {
     }
   };
 
+  const handlePhotoImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoImporting(true);
+    setPhotoError(null);
+    setShowPhotoImport(true);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result.split(",")[1]);
+        reader.onerror = () => rej(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
+      const mediaType = file.type || "image/jpeg";
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-opus-4-5",
+          max_tokens: 2000,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+              { type: "text", text: `Extract this recipe and format it exactly like this:
+
+Recipe Title
+Category: Mains
+Servings: 4
+Ingredients:
+- ingredient 1
+- ingredient 2
+Instructions:
+1. Step one
+2. Step two
+
+Use one of these categories: Appetizers, Italian, Soups & Stews, Mains, Meats, Fish & Seafood, Sides, Desserts, Breads & Breakfast, Drinks, Other.
+Return ONLY the formatted recipe, nothing else.` }
+            ]
+          }]
+        })
+      });
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const data = await response.json();
+      const recipeText = data.content?.[0]?.text;
+      if (!recipeText) throw new Error("No recipe text returned");
+      const nr = parseRecipes(recipeText);
+      if (!nr.length) throw new Error("Could not parse recipe from image");
+      const batch = writeBatch(db);
+      nr.forEach((r, i) => {
+        const id = `recipe_${Date.now()}_${i}`;
+        batch.set(doc(db, "recipes", id), {
+          title: r.title, category: r.category, baseServings: r.baseServings,
+          servings: r.servings, ingredients: r.ingredients, instructions: r.instructions, favorite: false
+        });
+      });
+      await batch.commit();
+      setShowPhotoImport(false);
+      setPhotoImporting(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    } catch(err) {
+      setPhotoError(err.message || "Something went wrong. Please try again.");
+      setPhotoImporting(false);
+    }
+  };
+
   const startEditRecipe = (r) => {
     setEditDraft({title:r.title,category:r.category,ingredients:r.ingredients.join("\n"),instructions:r.instructions.join("\n")});
     setEditingRecipeId(r.id);
@@ -2123,6 +2198,8 @@ export default function App() {
             {lowesItems.length>0&&<span style={{position:"absolute",top:-6,right:-6,background:"white",color:"#004990",borderRadius:"50%",fontSize:10,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,border:"1.5px solid #004990"}}>{lowesItems.length>99?"99+":lowesItems.length}</span>}
           </div>
           <button onClick={()=>setShowImport(v=>!v)} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:kraft,fontSize:12,cursor:"pointer",fontFamily:font}}>+ Import Recipe</button>
+          <button onClick={()=>photoInputRef.current?.click()} style={{padding:"6px 14px",borderRadius:16,border:`1.5px solid ${kraft}`,background:"transparent",color:kraft,fontSize:12,cursor:"pointer",fontFamily:font}}>📷 Photo</button>
+          <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
         </div>
         <div style={{display:"flex",overflowX:"auto",scrollbarWidth:"none"}}>
           {CATEGORIES.map(cat=>{const active=activeTab===cat;return <button key={cat} onClick={()=>setActiveTab(cat)} style={{padding:"7px 12px",fontSize:12,border:"none",cursor:"pointer",whiteSpace:"nowrap",borderRadius:"6px 6px 0 0",fontFamily:font,fontWeight:active?500:400,background:active?cream:tabBg,color:active?darkBrown:"#f5e6c8",marginRight:2}}>{cat}</button>;})}
@@ -2139,6 +2216,23 @@ export default function App() {
             <button onClick={()=>setShowImport(false)} style={{padding:"8px 14px",background:"transparent",color:darkBrown,border:`1px solid ${kraft}`,borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:font}}>Cancel</button>
             <button onClick={handleImport} style={{padding:"8px 18px",background:darkBrown,color:cream,border:"none",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:font}}>Save to Cookbook</button>
           </div>
+        </div>
+      )}
+      {showPhotoImport&&(
+        <div style={{background:"#fffcf2",border:`1px solid ${kraft}`,borderRadius:8,margin:"10px 12px",padding:14,textAlign:"center"}}>
+          {photoImporting?(
+            <>
+              <div style={{fontSize:28,marginBottom:8}}>📷</div>
+              <p style={{fontSize:14,color:tabBg,fontWeight:500}}>Reading recipe from photo…</p>
+              <p style={{fontSize:12,color:"#aaa"}}>This usually takes 5-10 seconds</p>
+            </>
+          ):photoError?(
+            <>
+              <div style={{fontSize:28,marginBottom:8}}>⚠️</div>
+              <p style={{fontSize:13,color:"#c0392b",marginBottom:8}}>{photoError}</p>
+              <button onClick={()=>{setShowPhotoImport(false);setPhotoError(null);}} style={{padding:"8px 18px",background:darkBrown,color:cream,border:"none",borderRadius:6,cursor:"pointer",fontSize:13,fontFamily:font}}>OK</button>
+            </>
+          ):null}
         </div>
       )}
       <div style={{padding:"12px 12px 0"}}>
