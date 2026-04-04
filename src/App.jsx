@@ -204,10 +204,10 @@ const KEYWORD_MAP = {
   snacks: ["chips","popcorn","pretzels","trail mix","pork rinds","tortilla chips","snack mix","nuts","almonds","walnuts","cashews","peanuts","pecans"],
   cleaning: ["cleaning","laundry","detergent","bleach","dish soap","dishwasher","sponge","trash bag","garbage bag","ziploc","plastic bag","foil","aluminum foil","parchment","plastic wrap","paper towel","napkin"],
   pet: ["dog food","cat food","pet","dog treat","cat treat","charcoal","lighter fluid"],
-  health2: ["kleenex","tissue","dove","bar soap","body wash","shampoo","conditioner","lotion","deodorant","toothpaste","toothbrush","floss","razor","cotton"],
-  health1: ["vitamin","supplement","medicine","ibuprofen","tylenol","advil","nyquil","bandage","first aid","melatonin","protein powder","probiotic"],
+  health2: ["kleenex","tissue","dove","softsoap","bar soap","body wash","shampoo","conditioner","lotion","deodorant","toothpaste","toothbrush","floss","razor","cotton"],
+  health1: ["vitamin","supplement","medicine","ibuprofen","tylenol","advil","nyquil","bandage","first aid","melatonin","protein powder","probiotic","mouthwash","listerine","oral b"],
   kitchen: ["cooking spray","food storage"],
-  spices: ["spices","cumin","paprika","oregano","cinnamon","turmeric","garlic powder","onion powder","chili powder","cayenne","red pepper flakes","italian seasoning","bay leaf","vanilla","baking soda","baking powder","flour","sugar","brown sugar","powdered sugar","cornstarch","yeast","cocoa","coffee","tea","thyme","rosemary","sage","nutmeg","coriander","smoked paprika","kosher salt","sea salt","black pepper","white pepper"],
+  spices: ["spices","cumin","paprika","oregano","cinnamon","turmeric","garlic powder","onion powder","chili powder","cayenne","red pepper flakes","italian seasoning","bay leaf","vanilla","baking soda","baking powder","flour","sugar","brown sugar","powdered sugar","cornstarch","yeast","cocoa","coffee","tea","thyme","rosemary","sage","marjoram","nutmeg","coriander","smoked paprika","kosher salt","sea salt","black pepper","white pepper"],
   canned: ["canned","can of","black beans","kidney beans","chickpeas","lentils","canned tomato","tomato sauce","canned corn","canned beans","canned vegetable","diced tomatoes","crushed tomatoes","coconut milk","evaporated milk","condensed milk","miso","white beans","cannellini beans"],
   pasta: ["pasta","spaghetti","penne","fettuccine","lasagna","macaroni","rice","quinoa","couscous","orzo","noodles","ramen","pasta sauce","marinara","alfredo","pesto","salsa","egg noodle","linguine","tortellini","ditalini","san marzano"],
   cereal: ["cereal","oatmeal","oats","granola","grits","cream of wheat","muesli","granola bar","protein bar"],
@@ -244,7 +244,7 @@ const classifyIngredient = (ing) => {
 
 const PREP_STRIP = /,?\s*(diced|chopped|minced|sliced|crushed|peeled|grated|shredded|julienned|halved|quartered|cubed|trimmed|thawed|drained|rinsed|beaten|softened|melted|room temperature|coarsely|finely|thinly|roughly|freshly|packed|heaping|level|divided|optional|to taste|for serving|for garnish|for frying|as needed|or more|or less|hand-crushed|torn|zested and juiced|juiced|zested|deveined|pounded|cut into cubes|separated|crumbled|peeled and cubed|peeled and diced|cooked and shredded|thinly sliced|roughly chopped|finely chopped|lightly beaten|freshly grated|freshly ground)[^,]*/gi;
 const COOK_WORDS = /\b(diced|chopped|minced|sliced|crushed|peeled|grated|shredded|cubed|trimmed|beaten|softened|melted|thawed|drained|rinsed|coarsely|finely|thinly|roughly|freshly|packed|heaping|divided|optional)\b/gi;
-const SPICES_AND_PANTRY = ["salt","pepper","black pepper","white pepper","red pepper flakes","crushed red pepper","cayenne","chili powder","cumin","paprika","smoked paprika","oregano","italian seasoning","garlic powder","onion powder","cinnamon","turmeric","nutmeg","sage","thyme","rosemary","bay leaf","coriander","allspice","cardamom","fennel","dill","curry powder","garam masala","old bay","baking soda","baking powder","cornstarch","yeast","vanilla extract","cocoa powder","sugar","brown sugar","powdered sugar","kosher salt","sea salt","flour","olive oil","vegetable oil","canola oil","coconut oil","sesame oil","garlic oil","soy sauce","worcestershire","fish sauce","hot sauce","sriracha","honey","maple syrup","vinegar","balsamic","apple cider vinegar","red wine vinegar","white wine vinegar","miso paste","tomato paste","chipotle","italian herbs","breadcrumbs","panko","dijon mustard","dijon"];
+const SPICES_AND_PANTRY = ["salt","pepper","black pepper","white pepper","red pepper flakes","crushed red pepper","cayenne","chili powder","cumin","paprika","smoked paprika","oregano","italian seasoning","garlic powder","onion powder","cinnamon","turmeric","nutmeg","sage","thyme","rosemary","marjoram","bay leaf","coriander","allspice","cardamom","fennel","dill","curry powder","garam masala","old bay","baking soda","baking powder","cornstarch","yeast","vanilla extract","cocoa powder","sugar","brown sugar","powdered sugar","kosher salt","sea salt","flour","olive oil","vegetable oil","canola oil","coconut oil","sesame oil","garlic oil","soy sauce","worcestershire","fish sauce","hot sauce","sriracha","honey","maple syrup","vinegar","balsamic","apple cider vinegar","red wine vinegar","white wine vinegar","miso paste","tomato paste","chipotle","italian herbs","breadcrumbs","panko","dijon mustard","dijon"];
 
 const MEAT_CONVERSIONS = [
   { match: /ground beef and pork/i, out: "ground beef and pork mix" },
@@ -355,6 +355,40 @@ const formatQty = (qty) => {
   const fs = f===0.25?"1/4":f===0.5?"1/2":f===0.75?"3/4":"";
   if (w===0) return fs; if (fs) return `${w} ${fs}`; return `${w}`;
 };
+
+// Produce sub-section ordering — matches Doug's path through the produce section
+const PRODUCE_ORDER = [
+  // Onions / Garlic / Potatoes
+  "onion","onions","garlic","shallot","scallion","green onion","potato","potatoes","sweet potato","ginger",
+  // Broccoli area
+  "broccoli","cauliflower","cabbage","kale","arugula","lettuce","celery","carrot","carrots","corn","green beans","squash","zucchini","cucumber","pepper","peppers","jalapeno","poblano","tomato","tomatoes","cherry tomato","roma","fresh herb","cilantro","parsley","basil","thyme","rosemary",
+  // Asparagus area
+  "asparagus",
+  // Apples
+  "apple",
+  // Bananas
+  "banana",
+  // Berries / citrus
+  "berries","lime","lemon","limes","lemons","orange",
+  // Mushrooms
+  "mushroom","mushrooms",
+  // Spinach / Avocado
+  "spinach","avocado","avocados",
+];
+
+const produceSubSort = (items) => {
+  return [...items].sort((a, b) => {
+    const aText = a.text.toLowerCase();
+    const bText = b.text.toLowerCase();
+    const aIdx = PRODUCE_ORDER.findIndex(k => aText.includes(k));
+    const bIdx = PRODUCE_ORDER.findIndex(k => bText.includes(k));
+    if (aIdx === -1 && bIdx === -1) return 0;
+    if (aIdx === -1) return 1;
+    if (bIdx === -1) return -1;
+    return aIdx - bIdx;
+  });
+};
+
 
 const combineItems = (items) => {
   const groups = {};
@@ -1590,7 +1624,10 @@ export default function App() {
     STORE_SECTIONS.forEach(s=>g[s.key]=[]);
     allShoppingItems.forEach(item=>{ (g[item.sectionKey]||g["kitchen"]).push(item); });
     const combined={};
-    Object.keys(g).forEach(key=>{ combined[key]=combineItems(g[key]); });
+    Object.keys(g).forEach(key=>{
+      const items = combineItems(g[key]);
+      combined[key] = key === "produce" ? produceSubSort(items) : items;
+    });
     return combined;
   }, [allShoppingItems]);
 
