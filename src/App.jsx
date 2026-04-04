@@ -32,15 +32,19 @@ const fmtTime = (s) => {
 
 // Request notification permission
 const requestNotificationPermission = async () => {
-  if ("Notification" in window && Notification.permission === "default") {
-    await Notification.requestPermission();
-  }
+  try {
+    if ("Notification" in window && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+  } catch(e) { /* silently fail */ }
 };
 
 const sendNotification = (title, body) => {
-  if ("Notification" in window && Notification.permission === "granted") {
-    new Notification(title, { body, icon: "/favicon.ico" });
-  }
+  try {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+  } catch(e) { /* silently fail — don't crash the app */ }
 };
 
 function StepTimer({ seconds, stepText, kraft, tabBg, cream, darkBrown }) {
@@ -58,7 +62,9 @@ function StepTimer({ seconds, stepText, kraft, tabBg, cream, darkBrown }) {
             clearInterval(intervalRef.current);
             setRunning(false);
             setDone(true);
-            sendNotification("⏱️ Timer Done!", stepText ? `Step complete: ${stepText.slice(0,60)}` : "Your cooking timer is done!");
+            try {
+              sendNotification("⏱️ Timer Done!", stepText ? `Step complete: ${stepText.slice(0,60)}` : "Your cooking timer is done!");
+            } catch(e) { /* silently fail */ }
             return 0;
           }
           return r - 1;
