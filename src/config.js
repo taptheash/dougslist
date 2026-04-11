@@ -101,7 +101,7 @@ export const classifyLowes = (text) => {
 
 export const KEYWORD_MAP = {
   entrance: ["sourdough","artisan bread","specialty bread","baguette"],
-  produce: ["lettuce","spinach","kale","cabbage","tomato","tomatoes","onion","onions","garlic","carrot","carrots","celery","potato","potatoes","sweet potato","pepper","peppers","cucumber","zucchini","mushroom","mushrooms","broccoli","cauliflower","avocado","avocados","lime","lemon","limes","lemons","apple","honeycrisp apples","banana","berries","cilantro","parsley","basil","ginger","jalapeno","scallion","shallot","corn","green onion","green beans","arugula","squash","asparagus","roma","fresh herb","cherry tomato"],
+  produce: ["lettuce","spinach","kale","cabbage","tomato","tomatoes","onion","onions","garlic","carrot","carrots","celery","potato","potatoes","sweet potato","pepper","peppers","cucumber","zucchini","mushroom","mushrooms","broccoli","cauliflower","avocado","avocados","lime","lemon","limes","lemons","apple","banana","berries","cilantro","parsley","basil","ginger","jalapeno","scallion","shallot","corn","green onion","green beans","arugula","squash","asparagus","roma","fresh herb","cherry tomato"],
   meat: ["chicken","beef","pork","lamb","turkey","bacon","sausage","ham","steak","roast","ground beef","ground turkey","chuck","brisket","sirloin","bratwurst","hot dog","pepperoni","salami"],
   deli: ["sliced turkey","sliced ham","sliced chicken","roast beef","bologna","deli meat","deli cheese","provolone","swiss cheese","american cheese","muenster","pepper jack","colby","salt pork","prosciutto","pancetta"],
   frozen1: ["frozen vegetable","frozen meal","frozen meat","frozen chicken","frozen fish","frozen shrimp","frozen corn","frozen peas","frozen spinach","frozen broccoli","frozen dinner","frozen dumpling","dumpling"],
@@ -134,7 +134,9 @@ export const classifyIngredient = (ing) => {
   if (/tomato paste|tomato sauce/.test(lower)) return "condiments";
   if (/frozen|dumpling/.test(lower)) return "frozen1";
   if (/pie crust|pie shell/.test(lower)) return "dairy";
+  if (/peanut butter|almond butter|nut butter/.test(lower)) return "bread";  // ← ADD before butter check
   if (/\bbutter\b/.test(lower)) return "dairy";
+  if (/\bapple\b/.test(lower) && !/apple cider vinegar/.test(lower)) return "produce";  // ← ADD before condiments
   if (/dijon/.test(lower)) return "condiments";
   if (/oil/.test(lower)) return "condiments";
   if (/wine/.test(lower)) return "beverages2";
