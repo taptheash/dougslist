@@ -211,6 +211,9 @@ export default function App() {
   const lowesTimerRef = useRef(null);
   const lowesResetAtRef = useRef(null);
 
+  // Scroll to top on mount
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e) => {
@@ -1032,7 +1035,7 @@ Return ONLY the formatted recipe, nothing else.`;
   // --- Recipe list view ---
   return (
     <div style={{fontFamily:font,background:cream,minHeight:"100vh",color:darkBrown,paddingBottom:40}}>
-      <div style={{background:darkBrown,padding:"14px 16px 0",color:cream}}>
+      <div style={{background:darkBrown,padding:"14px 16px 0",color:cream,position:"sticky",top:0,zIndex:100}}>
         <p style={{fontSize:22,fontWeight:500,margin:0,color:cream,letterSpacing:1}}>{APP_NAME}</p>
         <div style={{display:"flex",gap:6,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
 
