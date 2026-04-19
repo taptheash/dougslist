@@ -143,6 +143,16 @@ const scaleIngredient = (line, ratio) => line.replace(/(\d+\.?\d*\/?\d*)/g, matc
   const v=parseFloat(match)*ratio; if(v%1===0) return v.toString(); return v.toFixed(2).replace(/\.?0+$/,"");
 });
 
+// ── Back button ───────────────────────────────────────────────────────────────
+function BackBtn({ to, label, setView }) {
+  return (
+    <button onClick={()=>setView(to)} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 4L6 9l5 5" stroke={M3.primaryContainer} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      <span style={{fontSize:13,color:M3.primaryContainer}}>{label}</span>
+    </button>
+  );
+}
+
 // ── Generic shopping list item ────────────────────────────────────────────────
 function GenericItem({ item, done, onToggle, onRemove, storeColor }) {
   return (
@@ -475,14 +485,6 @@ export default function App() {
   const mbCount=total, targetCount=targetItems.length, lowesCount=lowesItems.length;
   const totalItems=mbCount+targetCount+lowesCount;
 
-  // ── Back arrow ──
-  const BackBtn = ({to, label}) => (
-    <button onClick={()=>setView(to)} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 4L6 9l5 5" stroke={M3.primaryContainer} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-      <span style={{fontSize:13,color:M3.primaryContainer}}>{label}</span>
-    </button>
-  );
-
   // ════════════════════════════════════════════════════════════════════════════
   // LOADING
   if (loading) return (
@@ -501,7 +503,7 @@ export default function App() {
   if (view==="storeSelect") return (
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
       <div style={{background:M3.primary,padding:"14px 16px 20px"}}>
-        <BackBtn to="recipes" label="Recipes"/>
+        <BackBtn to="recipes" label="Recipes" setView={setView}/>
         <div style={{fontSize:11,color:`${M3.onPrimary}99`,letterSpacing:1.2,marginBottom:3}}>Shopping</div>
         <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary}}>Choose a store</div>
       </div>
@@ -556,7 +558,7 @@ export default function App() {
     return (
       <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
         <div style={{background:M3.primary,padding:"14px 16px 14px"}}>
-          <BackBtn to="storeSelect" label="Stores"/>
+          <BackBtn to="storeSelect" label="Stores" setView={setView}/>
           <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
             <div>
               <div style={{fontSize:11,color:`${M3.onPrimary}99`,letterSpacing:1.2,marginBottom:2}}>{store.label}</div>
