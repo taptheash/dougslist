@@ -143,6 +143,79 @@ const scaleIngredient = (line, ratio) => line.replace(/(\d+\.?\d*\/?\d*)/g, matc
   const v=parseFloat(match)*ratio; if(v%1===0) return v.toString(); return v.toFixed(2).replace(/\.?0+$/,"");
 });
 
+// ── M3 Bottom Navigation Bar ─────────────────────────────────────────────────
+function BottomNav({ view, setView, totalItems, M3, font, photoInputRef }) {
+  const tabs = [
+    {
+      id: "recipes",
+      label: "Recipes",
+      icon: (active) => (
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M4 6h14M4 11h14M4 16h9" stroke={active ? M3.primary : M3.onSurfaceVariant} strokeWidth="1.6" strokeLinecap="round"/>
+        </svg>
+      ),
+    },
+    {
+      id: "storeSelect",
+      label: "Shopping",
+      badge: totalItems,
+      icon: (active) => (
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M2 2h3l2 10h10l2-7H6" stroke={active ? M3.primary : M3.onSurfaceVariant} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx="9" cy="17" r="1.5" fill={active ? M3.primary : M3.onSurfaceVariant}/>
+          <circle cx="16" cy="17" r="1.5" fill={active ? M3.primary : M3.onSurfaceVariant}/>
+        </svg>
+      ),
+    },
+    {
+      id: "import",
+      label: "Import",
+      icon: (active) => (
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="11" cy="11" r="8.5" stroke={active ? M3.primary : M3.onSurfaceVariant} strokeWidth="1.6"/>
+          <path d="M11 7v8M8 13l3 3 3-3" stroke={active ? M3.primary : M3.onSurfaceVariant} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      ),
+    },
+  ];
+
+  const activeTab = ["recipes"].includes(view) ? "recipes"
+    : ["storeSelect","shopping"].includes(view) ? "storeSelect"
+    : view === "import" ? "import"
+    : "recipes";
+
+  return (
+    <div style={{
+      position:"fixed", bottom:0, left:0, right:0,
+      background:M3.surface,
+      borderTop:`0.5px solid ${M3.outlineVariant}`,
+      display:"flex", zIndex:200,
+      paddingBottom:"env(safe-area-inset-bottom, 0px)",
+    }}>
+      {tabs.map(tab => {
+        const active = activeTab === tab.id;
+        return (
+          <button key={tab.id} onClick={()=>setView(tab.id)}
+            style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font,position:"relative"}}>
+            {/* Active pill indicator */}
+            <div style={{width:64,height:32,borderRadius:16,background:active?M3.secondaryContainer:"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.15s",position:"relative"}}>
+              {tab.icon(active)}
+              {tab.badge>0&&(
+                <span style={{position:"absolute",top:-2,right:8,background:M3.error,color:M3.onError,borderRadius:"50%",fontSize:9,width:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>
+                  {tab.badge>99?"99+":tab.badge}
+                </span>
+              )}
+            </div>
+            <span style={{fontSize:11,color:active?M3.primary:M3.onSurfaceVariant,fontWeight:active?500:400}}>
+              {tab.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 export default function App() {
   // ── State ──
@@ -156,7 +229,6 @@ export default function App() {
   const [storeTab, setStoreTab] = useState("mb");
 
   // import
-  const [showImportDropdown, setShowImportDropdown] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
   const [showPhotoImport, setShowPhotoImport] = useState(false);
@@ -167,7 +239,6 @@ export default function App() {
   const [urlImporting, setUrlImporting] = useState(false);
   const [urlImportError, setUrlImportError] = useState(null);
   const photoInputRef = useRef(null);
-  const importDropdownRef = useRef(null);
 
   // edit
   const [editingRecipeId, setEditingRecipeId] = useState(null);
@@ -209,12 +280,6 @@ export default function App() {
 
   // ── Effects ──
   useEffect(() => { window.scrollTo(0,0); }, []);
-
-  useEffect(() => {
-    const h = (e) => { if (importDropdownRef.current && !importDropdownRef.current.contains(e.target)) setShowImportDropdown(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
 
   useEffect(() => {
     const run = async () => {
@@ -387,7 +452,7 @@ export default function App() {
   const toggleWakeLock=async()=>{ if(wakeActive&&wakeLock){await wakeLock.release();setWakeLock(null);setWakeActive(false);} else{try{if("wakeLock" in navigator){const lock=await navigator.wakeLock.request("screen");setWakeLock(lock);setWakeActive(true);lock.addEventListener("release",()=>{setWakeActive(false);setWakeLock(null);});}}catch(e){}} };
 
   const saveRecipesToFirestore=async(nr)=>{ const batch=writeBatch(db); nr.forEach((r,i)=>{const id=`recipe_${Date.now()}_${i}`;batch.set(doc(db,"recipes",id),{title:r.title,category:r.category,baseServings:r.baseServings,servings:r.servings,ingredients:r.ingredients,instructions:r.instructions,favorite:false,notes:"",storage:""});}); await batch.commit(); };
-  const RECIPE_PROMPT=`Extract this recipe and format it exactly like this:\n\nRecipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient 1\n- ingredient 2\nInstructions:\n1. Step one\n2. Step two\n\nUse one of these categories: Appetizers, Italian, Soups & Stews, Mains, Meats, Fish & Seafood, Sides, Desserts, Breads & Breakfast, Drinks, Other.\nReturn ONLY the formatted recipe, nothing else.`;
+  const RECIPE_PROMPT=`Extract this recipe and format it exactly like this:\n\nRecipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient 1\n- ingredient 2\nInstructions:\n1. Step one\n2. Step two\n\nUse one of these categories: Appetizers, Italian, Soups & Stews, Mains, Meats, Fish & Seafood, Vegetables, Sides, Desserts, Breads & Breakfast, Drinks, Other.\nReturn ONLY the formatted recipe, nothing else.`;
 
   const handleImport=async()=>{ if(!importText.trim())return; const nr=parseRecipes(importText); if(nr.length){await saveRecipesToFirestore(nr);setImportText("");setShowImport(false);} };
 
@@ -430,7 +495,7 @@ export default function App() {
   // ════════════════════════════════════════════════════════════════════════════
   // STORE SELECTOR
   if (view==="storeSelect") return (
-    <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:40}}>
+    <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
       <div style={{background:M3.primary,padding:"14px 16px 20px"}}>
         <BackBtn to="recipes" label="Recipes"/>
         <div style={{fontSize:11,color:`${M3.onPrimary}99`,letterSpacing:1.2,marginBottom:3}}>Shopping</div>
@@ -453,6 +518,7 @@ export default function App() {
           );
         })}
       </div>
+      <BottomNav view={view} setView={setView} totalItems={totalItems} M3={M3} font={font} photoInputRef={photoInputRef}/>
     </div>
   );
 
@@ -494,7 +560,7 @@ export default function App() {
     const countdown=storeTab==="target"?targetCountdown:storeTab==="lowes"?lowesCountdown:null;
 
     return (
-      <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:40}}>
+      <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
         <div style={{background:M3.primary,padding:"14px 16px 14px"}}>
           <BackBtn to="storeSelect" label="Stores"/>
           <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
@@ -620,8 +686,110 @@ export default function App() {
           </div>
         ))}
       </div>
+      <BottomNav view={view} setView={setView} totalItems={totalItems} M3={M3} font={font} photoInputRef={photoInputRef}/>
     );
   }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // IMPORT SCREEN
+  if (view==="import") return (
+    <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
+      <div style={{background:M3.primary,padding:"14px 16px 20px"}}>
+        <div style={{fontSize:11,color:`${M3.onPrimary}99`,letterSpacing:1.2,marginBottom:3}}>Add recipes</div>
+        <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary}}>Import</div>
+      </div>
+
+      <div style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
+        {/* Paste text */}
+        <div style={{background:M3.surface,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,overflow:"hidden"}}>
+          <button onClick={()=>setShowImport(v=>!v)}
+            style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
+            <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>📝</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>Paste text</div>
+              <div style={{fontSize:13,color:M3.onSurfaceVariant,marginTop:2}}>Copy & paste a recipe from anywhere</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d={showImport?"M4 10l4-4 4 4":"M4 6l4 4 4-4"} stroke={M3.outline} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          {showImport&&(
+            <div style={{padding:"0 16px 16px"}}>
+              <textarea value={importText} onChange={e=>setImportText(e.target.value)}
+                style={{width:"100%",height:160,border:`1px solid ${M3.outlineVariant}`,borderRadius:8,padding:10,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,resize:"vertical",boxSizing:"border-box",outline:"none",lineHeight:1.6}}
+                placeholder={"Recipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient\nInstructions:\n1. Step one"}/>
+              <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
+                <button onClick={()=>{setShowImport(false);setImportText("");}} style={{padding:"8px 16px",background:"transparent",color:M3.onSurface,border:`1px solid ${M3.outline}`,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Clear</button>
+                <button onClick={async()=>{await handleImport();setView("recipes");}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font,fontWeight:500}}>Save recipe</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Photo */}
+        <div style={{background:M3.surface,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,overflow:"hidden"}}>
+          <button onClick={()=>photoInputRef.current?.click()}
+            style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
+            <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>📷</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>Photo</div>
+              <div style={{fontSize:13,color:M3.onSurfaceVariant,marginTop:2}}>Take or upload a photo of a recipe</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke={M3.outline} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          {showPhotoImport&&(
+            <div style={{padding:"0 16px 16px",textAlign:"center"}}>
+              {photoImporting?(
+                <>
+                  <div style={{fontSize:13,color:M3.onSurfaceVariant,fontWeight:500}}>Reading recipe from photo…</div>
+                  <div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–10 seconds</div>
+                </>
+              ):photoError?(
+                <>
+                  <p style={{fontSize:13,color:M3.error,marginBottom:10}}>{photoError}</p>
+                  <button onClick={()=>{setShowPhotoImport(false);setPhotoError(null);}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>OK</button>
+                </>
+              ):null}
+            </div>
+          )}
+        </div>
+
+        {/* URL */}
+        <div style={{background:M3.surface,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,overflow:"hidden"}}>
+          <button onClick={()=>setShowUrlImport(v=>!v)}
+            style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
+            <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>🔗</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>URL / link</div>
+              <div style={{fontSize:13,color:M3.onSurfaceVariant,marginTop:2}}>Import directly from a recipe website</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d={showUrlImport?"M4 10l4-4 4 4":"M4 6l4 4 4-4"} stroke={M3.outline} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          {showUrlImport&&(
+            <div style={{padding:"0 16px 16px"}}>
+              {urlImporting?(
+                <div style={{textAlign:"center",padding:"8px 0"}}>
+                  <div style={{fontSize:13,color:M3.onSurfaceVariant,fontWeight:500}}>Fetching recipe…</div>
+                  <div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–15 seconds</div>
+                </div>
+              ):(
+                <>
+                  {urlImportError&&<p style={{fontSize:12,color:M3.error,marginBottom:8}}>⚠ {urlImportError}</p>}
+                  <input value={urlImportValue} onChange={e=>setUrlImportValue(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleUrlImport()}
+                    placeholder="https://example.com/recipes/…"
+                    style={{width:"100%",padding:"10px 12px",border:`1px solid ${M3.outlineVariant}`,borderRadius:8,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,boxSizing:"border-box",outline:"none"}}/>
+                  <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
+                    <button onClick={()=>{setShowUrlImport(false);setUrlImportValue("");setUrlImportError(null);}} style={{padding:"8px 16px",background:"transparent",color:M3.onSurface,border:`1px solid ${M3.outline}`,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Cancel</button>
+                    <button onClick={async()=>{await handleUrlImport();}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font,fontWeight:500}}>Import</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <BottomNav view={view} setView={setView} totalItems={totalItems} M3={M3} font={font} photoInputRef={photoInputRef}/>
+    </div>
+  );
 
   // ════════════════════════════════════════════════════════════════════════════
   // RECIPE DETAIL
@@ -775,41 +943,9 @@ export default function App() {
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:40}}>
       {/* Sticky header */}
       <div style={{background:M3.primary,padding:"14px 16px 0",position:"sticky",top:0,zIndex:100}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",marginBottom:10}}>
           <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2}}>{APP_NAME}</div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {/* Shopping button */}
-            <div style={{position:"relative"}}>
-              <button onClick={()=>setView("storeSelect")}
-                style={{background:M3.primaryContainer,border:"none",borderRadius:20,padding:"7px 14px",fontSize:12,fontWeight:500,color:M3.onPrimaryContainer,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",gap:6}}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1h2l1.5 7h7l1-5H4" stroke={M3.onPrimaryContainer} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/><circle cx="6" cy="12" r="1" fill={M3.onPrimaryContainer}/><circle cx="11" cy="12" r="1" fill={M3.onPrimaryContainer}/></svg>
-                Shopping
-              </button>
-              {totalItems>0&&<span style={{position:"absolute",top:-5,right:-5,background:M3.error,color:M3.onError,borderRadius:"50%",fontSize:9,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{Math.min(totalItems,99)}</span>}
-            </div>
-            {/* Import dropdown */}
-            <div style={{position:"relative"}} ref={importDropdownRef}>
-              <button onClick={()=>setShowImportDropdown(v=>!v)}
-                style={{background:showImportDropdown?M3.primaryContainer:"transparent",border:`1px solid ${M3.primaryContainer}`,borderRadius:20,padding:"7px 12px",fontSize:12,fontWeight:500,color:showImportDropdown?M3.onPrimaryContainer:M3.primaryContainer,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",gap:5}}>
-                + Import <span style={{fontSize:9,opacity:0.75}}>{showImportDropdown?"▲":"▼"}</span>
-              </button>
-              {showImportDropdown&&(
-                <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:M3.surface,border:`1px solid ${M3.outlineVariant}`,borderRadius:12,boxShadow:"0 4px 16px rgba(103,80,164,0.15)",zIndex:200,minWidth:160,overflow:"hidden"}}>
-                  {[{icon:"📝",label:"Paste text",action:()=>{setShowImport(true);setShowUrlImport(false);}},{icon:"📷",label:"Photo",action:()=>{photoInputRef.current?.click();}},{icon:"🔗",label:"URL / link",action:()=>{setShowUrlImport(true);setShowImport(false);}}].map((opt,idx,arr)=>(
-                    <button key={opt.label} onClick={()=>{setShowImportDropdown(false);opt.action();}}
-                      style={{width:"100%",padding:"11px 15px",background:"transparent",border:"none",borderBottom:idx<arr.length-1?`0.5px solid ${M3.outlineVariant}`:"none",textAlign:"left",fontSize:13,color:M3.onSurface,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",gap:10}}
-                      onMouseEnter={e=>e.currentTarget.style.background=M3.surfaceVariant}
-                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                      <span style={{fontSize:15}}>{opt.icon}</span> {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
-
-        <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
 
         {/* Category chips */}
         <div style={{display:"flex",overflowX:"auto",scrollbarWidth:"none",gap:6,paddingBottom:10}}>
@@ -826,6 +962,7 @@ export default function App() {
       </div>
 
       {/* Search */}
+      <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
       <div style={{padding:"12px 14px 6px",display:"flex",gap:8,alignItems:"center"}}>
         <div style={{flex:1,position:"relative",display:"flex",alignItems:"center"}}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{position:"absolute",left:12,flexShrink:0,pointerEvents:"none"}}>
@@ -840,58 +977,8 @@ export default function App() {
         </button>
       </div>
 
-      {/* Import panels */}
-      {showImport&&(
-        <div style={{background:M3.secondaryContainer,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,margin:"8px 14px",padding:16}}>
-          <p style={{fontSize:13,color:M3.onSecondaryContainer,marginBottom:8}}>Paste recipe text below.</p>
-          <textarea value={importText} onChange={e=>setImportText(e.target.value)} style={{width:"100%",height:140,border:`1px solid ${M3.outlineVariant}`,borderRadius:8,padding:10,fontSize:13,fontFamily:font,background:M3.surface,color:M3.onSurface,resize:"vertical",boxSizing:"border-box",outline:"none"}} placeholder={"Recipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient\nInstructions:\n1. Step one"}/>
-          <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
-            <button onClick={()=>setShowImport(false)} style={{padding:"8px 16px",background:"transparent",color:M3.onSecondaryContainer,border:`1px solid ${M3.outline}`,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Cancel</button>
-            <button onClick={handleImport} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font,fontWeight:500}}>Save</button>
-          </div>
-        </div>
-      )}
-
-      {showUrlImport&&(
-        <div style={{background:M3.secondaryContainer,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,margin:"8px 14px",padding:16}}>
-          {urlImporting?(
-            <div style={{textAlign:"center",padding:"10px 0"}}>
-              <div style={{fontSize:13,color:M3.onSecondaryContainer,fontWeight:500}}>Fetching recipe…</div>
-              <div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–15 seconds</div>
-            </div>
-          ):(
-            <>
-              <p style={{fontSize:13,color:M3.onSecondaryContainer,marginBottom:10}}>Paste a recipe URL.</p>
-              {urlImportError&&<p style={{fontSize:12,color:M3.error,marginBottom:8}}>⚠ {urlImportError}</p>}
-              <input value={urlImportValue} onChange={e=>setUrlImportValue(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleUrlImport()} placeholder="https://example.com/recipes/…"
-                style={{width:"100%",padding:"10px 12px",border:`1px solid ${M3.outlineVariant}`,borderRadius:8,fontSize:13,fontFamily:font,background:M3.surface,color:M3.onSurface,boxSizing:"border-box",outline:"none"}}/>
-              <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
-                <button onClick={()=>{setShowUrlImport(false);setUrlImportValue("");setUrlImportError(null);}} style={{padding:"8px 16px",background:"transparent",color:M3.onSecondaryContainer,border:`1px solid ${M3.outline}`,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Cancel</button>
-                <button onClick={handleUrlImport} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font,fontWeight:500}}>Import</button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {showPhotoImport&&(
-        <div style={{background:M3.secondaryContainer,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,margin:"8px 14px",padding:16,textAlign:"center"}}>
-          {photoImporting?(
-            <>
-              <div style={{fontSize:13,color:M3.onSecondaryContainer,fontWeight:500}}>Reading recipe from photo…</div>
-              <div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–10 seconds</div>
-            </>
-          ):photoError?(
-            <>
-              <p style={{fontSize:13,color:M3.error,marginBottom:10}}>{photoError}</p>
-              <button onClick={()=>{setShowPhotoImport(false);setPhotoError(null);}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>OK</button>
-            </>
-          ):null}
-        </div>
-      )}
-
       {/* Recipe list */}
-      <div style={{padding:"8px 14px 0"}}>
+      <div style={{padding:"8px 14px 0",paddingBottom:90}}>
         {filtered.length===0?(
           <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>
             {search?"No recipes match your search.":activeTab==="Favorites"?"No favorites yet.":"No recipes in this category yet."}
@@ -911,6 +998,9 @@ export default function App() {
           </div>
         ))}
       </div>
+
+      {/* M3 Bottom Navigation Bar */}
+      <BottomNav view={view} setView={setView} totalItems={totalItems} M3={M3} font={font} photoInputRef={photoInputRef}/>
     </div>
   );
 }
