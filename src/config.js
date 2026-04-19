@@ -4,7 +4,12 @@
 export const APP_NAME = "dougslist";
 export const GROCERY_STORE_NAME = "Market Basket · Merchants Way";
 
-export const CATEGORIES = ["All","Favorites","Appetizers","Italian","Soups & Stews","Mains","Meats","Fish & Seafood","Sides","Desserts","Breads & Breakfast","Drinks","Other"];
+// AFTER:
+export const CATEGORIES = [
+  "All", "Favorites", "Appetizers", "Italian", "Soups & Stews",
+  "Mains", "Meats", "Fish & Seafood", "Vegetables", "Sides", "Desserts",
+  "Breads & Breakfast", "Drinks", "Other"
+];
 
 export const STORE_SECTIONS = [
   { key: "entrance", label: "🥖 Entrance — Artisan Bread", aisle: "Entrance" },
