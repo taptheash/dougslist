@@ -146,9 +146,10 @@ const scaleIngredient = (line, ratio) => line.replace(/(\d+\.?\d*\/?\d*)/g, matc
 // ── Back button ───────────────────────────────────────────────────────────────
 function BackBtn({ to, label, setView }) {
   return (
-    <button onClick={()=>setView(to)} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 4L6 9l5 5" stroke={M3.primaryContainer} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-      <span style={{fontSize:13,color:M3.primaryContainer}}>{label}</span>
+    <button onClick={()=>setView(to)}
+      style={{background:M3.primaryContainer,border:"none",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:font}}>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke={M3.onPrimaryContainer} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      <span style={{fontSize:12,fontWeight:500,color:M3.onPrimaryContainer}}>{label}</span>
     </button>
   );
 }
@@ -552,11 +553,14 @@ export default function App() {
     return (
       <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
         <div style={{background:M3.primary,padding:"14px 16px 14px"}}>
-          <BackBtn to="storeSelect" label="Stores" setView={setView}/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2}}>{APP_NAME}</div>
+            <BackBtn to="storeSelect" label="Home" setView={setView}/>
+          </div>
           <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
             <div>
               <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:2}}>{store.label}</div>
-              <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary}}>Shopping list</div>
+              <div style={{fontSize:18,fontWeight:500,color:M3.onPrimary}}>Shopping list</div>
             </div>
             <button onClick={resetFn} style={{background:"transparent",color:M3.primaryContainer,border:"1px solid "+M3.primaryContainer,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500}}>Reset</button>
           </div>
@@ -676,8 +680,12 @@ export default function App() {
   if (view==="import") return (
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
       <div style={{background:M3.primary,padding:"14px 16px 20px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+          <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2}}>{APP_NAME}</div>
+          <BackBtn to="storeSelect" label="Home" setView={setView}/>
+        </div>
         <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:3}}>Add recipes</div>
-        <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary}}>Import</div>
+        <div style={{fontSize:18,fontWeight:500,color:M3.onPrimary}}>Import</div>
       </div>
 
       <div style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
@@ -706,6 +714,7 @@ export default function App() {
         </div>
 
         {/* Photo */}
+        <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
         <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
           <button onClick={()=>photoInputRef.current?.click()}
             style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
@@ -778,7 +787,7 @@ export default function App() {
     const ratio=selected.servings/selected.baseServings;
     const isEditing=editingRecipeId===selected.id;
     return (
-      <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:40}}>
+      <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
         <div style={{background:M3.primary,padding:"14px 16px 18px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
             <button onClick={()=>{setSelectedId(null);cancelEditRecipe();setConfirmDelete(false);if(wakeLock)wakeLock.release();setWakeActive(false);setWakeLock(null);}}
@@ -921,11 +930,12 @@ export default function App() {
   // ════════════════════════════════════════════════════════════════════════════
   // RECIPE LIST
   return (
-    <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:40}}>
+    <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
       {/* Sticky header */}
       <div style={{background:M3.primary,padding:"14px 16px 0",position:"sticky",top:0,zIndex:100}}>
-        <div style={{display:"flex",alignItems:"center",marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
           <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2}}>{APP_NAME}</div>
+          <BackBtn to="storeSelect" label="Home" setView={setView}/>
         </div>
 
         {/* Category chips */}
@@ -943,7 +953,6 @@ export default function App() {
       </div>
 
       {/* Search */}
-      <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
       <div style={{padding:"12px 14px 6px",display:"flex",gap:8,alignItems:"center"}}>
         <div style={{flex:1,position:"relative",display:"flex",alignItems:"center"}}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{position:"absolute",left:12,flexShrink:0,pointerEvents:"none"}}>
