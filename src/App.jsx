@@ -713,34 +713,38 @@ export default function App() {
           )}
         </div>
 
-        {/* Photo */}
-        <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
-        <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
-          <button onClick={()=>photoInputRef.current?.click()}
-            style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
-            <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>📷</div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>Photo</div>
-              <div style={{fontSize:13,color:M3.onSurfaceVariant,marginTop:2}}>Take or upload a photo of a recipe</div>
+        {/* Photo — mobile only */}
+        {(()=>{ const isMobile = typeof window !== "undefined" && (navigator.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches); return isMobile ? (
+          <>
+            <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
+            <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
+              <button onClick={()=>photoInputRef.current?.click()}
+                style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
+                <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>📷</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>Photo</div>
+                  <div style={{fontSize:13,color:M3.onSurfaceVariant,marginTop:2}}>Take or upload a photo of a recipe</div>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke={M3.outline} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              {showPhotoImport&&(
+                <div style={{padding:"0 16px 16px",textAlign:"center"}}>
+                  {photoImporting?(
+                    <>
+                      <div style={{fontSize:13,color:M3.onSurfaceVariant,fontWeight:500}}>Reading recipe from photo…</div>
+                      <div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–10 seconds</div>
+                    </>
+                  ):photoError?(
+                    <>
+                      <p style={{fontSize:13,color:M3.error,marginBottom:10}}>{photoError}</p>
+                      <button onClick={()=>{setShowPhotoImport(false);setPhotoError(null);}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>OK</button>
+                    </>
+                  ):null}
+                </div>
+              )}
             </div>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke={M3.outline} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </button>
-          {showPhotoImport&&(
-            <div style={{padding:"0 16px 16px",textAlign:"center"}}>
-              {photoImporting?(
-                <>
-                  <div style={{fontSize:13,color:M3.onSurfaceVariant,fontWeight:500}}>Reading recipe from photo…</div>
-                  <div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–10 seconds</div>
-                </>
-              ):photoError?(
-                <>
-                  <p style={{fontSize:13,color:M3.error,marginBottom:10}}>{photoError}</p>
-                  <button onClick={()=>{setShowPhotoImport(false);setPhotoError(null);}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>OK</button>
-                </>
-              ):null}
-            </div>
-          )}
-        </div>
+          </>
+        ) : null; })()}
 
         {/* URL */}
         <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
