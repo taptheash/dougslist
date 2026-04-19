@@ -585,9 +585,10 @@ export default function App() {
         </div>
 
         {/* MB sections */}
-        {storeTab==="mb"&&(total===0?(
+        {storeTab==="mb" && total===0 && (
           <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>No items yet. Check recipes or add items above.</p>
-        ):(
+        )}
+        {storeTab==="mb" && total>0 && (
           <div style={{padding:"4px 0"}}>
             {activeSections.map(sec=>(
               <div key={sec.key} style={{margin:"10px 14px 0"}}>
@@ -649,12 +650,13 @@ export default function App() {
               </div>
             )}
           </div>
-        ))}
+        )}
 
         {/* Target sections */}
-        {storeTab==="target"&&(targetTotal===0?(
+        {storeTab==="target" && targetTotal===0 && (
           <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>No items yet. Add above.</p>
-        ):(
+        )}
+        {storeTab==="target" && targetTotal>0 && (
           <div style={{padding:"4px 0"}}>
             {targetActiveCats.map(cat=>(
               <div key={cat.key} style={{margin:"10px 14px 0"}}>
@@ -663,12 +665,13 @@ export default function App() {
               </div>
             ))}
           </div>
-        ))}
+        )}
 
         {/* Lowe's sections */}
-        {storeTab==="lowes"&&(lowesTotal===0?(
+        {storeTab==="lowes" && lowesTotal===0 && (
           <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>No items yet. Add above.</p>
-        ):(
+        )}
+        {storeTab==="lowes" && lowesTotal>0 && (
           <div style={{padding:"4px 0"}}>
             {lowesActiveCats.map(cat=>(
               <div key={cat.key} style={{margin:"10px 14px 0"}}>
@@ -677,7 +680,7 @@ export default function App() {
               </div>
             ))}
           </div>
-        ))}
+        )}
       </div>
       <BottomNav view={view} setView={setView} totalItems={totalItems}/>
     );
