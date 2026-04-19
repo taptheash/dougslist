@@ -144,74 +144,65 @@ const scaleIngredient = (line, ratio) => line.replace(/(\d+\.?\d*\/?\d*)/g, matc
 });
 
 // ── M3 Bottom Navigation Bar ─────────────────────────────────────────────────
-function BottomNav({ view, setView, totalItems, M3, font, photoInputRef }) {
-  const tabs = [
-    {
-      id: "recipes",
-      label: "Recipes",
-      icon: (active) => (
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-          <path d="M4 6h14M4 11h14M4 16h9" stroke={active ? M3.primary : M3.onSurfaceVariant} strokeWidth="1.6" strokeLinecap="round"/>
-        </svg>
-      ),
-    },
-    {
-      id: "storeSelect",
-      label: "Shopping",
-      badge: totalItems,
-      icon: (active) => (
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-          <path d="M2 2h3l2 10h10l2-7H6" stroke={active ? M3.primary : M3.onSurfaceVariant} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-          <circle cx="9" cy="17" r="1.5" fill={active ? M3.primary : M3.onSurfaceVariant}/>
-          <circle cx="16" cy="17" r="1.5" fill={active ? M3.primary : M3.onSurfaceVariant}/>
-        </svg>
-      ),
-    },
-    {
-      id: "import",
-      label: "Import",
-      icon: (active) => (
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-          <circle cx="11" cy="11" r="8.5" stroke={active ? M3.primary : M3.onSurfaceVariant} strokeWidth="1.6"/>
-          <path d="M11 7v8M8 13l3 3 3-3" stroke={active ? M3.primary : M3.onSurfaceVariant} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      ),
-    },
-  ];
-
-  const activeTab = ["recipes"].includes(view) ? "recipes"
-    : ["storeSelect","shopping"].includes(view) ? "storeSelect"
+function BottomNav({ view, setView, totalItems }) {
+  const activeTab = (view === "storeSelect" || view === "shopping") ? "storeSelect"
     : view === "import" ? "import"
     : "recipes";
 
+  const pill = (id) => ({
+    width:64, height:32, borderRadius:16,
+    background: activeTab===id ? M3.secondaryContainer : "transparent",
+    display:"flex", alignItems:"center", justifyContent:"center",
+    position:"relative",
+  });
+  const label = (id) => ({
+    fontSize:11,
+    color: activeTab===id ? M3.primary : M3.onSurfaceVariant,
+    fontWeight: activeTab===id ? 500 : 400,
+  });
+  const ic = (id) => activeTab===id ? M3.primary : M3.onSurfaceVariant;
+
   return (
-    <div style={{
-      position:"fixed", bottom:0, left:0, right:0,
-      background:M3.surface,
-      borderTop:`0.5px solid ${M3.outlineVariant}`,
-      display:"flex", zIndex:200,
-      paddingBottom:"env(safe-area-inset-bottom, 0px)",
-    }}>
-      {tabs.map(tab => {
-        const active = activeTab === tab.id;
-        return (
-          <button key={tab.id} onClick={()=>setView(tab.id)}
-            style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font,position:"relative"}}>
-            {/* Active pill indicator */}
-            <div style={{width:64,height:32,borderRadius:16,background:active?M3.secondaryContainer:"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.15s",position:"relative"}}>
-              {tab.icon(active)}
-              {tab.badge>0&&(
-                <span style={{position:"absolute",top:-2,right:8,background:M3.error,color:M3.onError,borderRadius:"50%",fontSize:9,width:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>
-                  {tab.badge>99?"99+":tab.badge}
-                </span>
-              )}
-            </div>
-            <span style={{fontSize:11,color:active?M3.primary:M3.onSurfaceVariant,fontWeight:active?500:400}}>
-              {tab.label}
+    <div style={{position:"fixed",bottom:0,left:0,right:0,background:M3.surface,borderTop:`0.5px solid ${M3.outlineVariant}`,display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
+
+      {/* Recipes tab */}
+      <button onClick={()=>setView("recipes")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font}}>
+        <div style={pill("recipes")}>
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M4 6h14M4 11h14M4 16h9" stroke={ic("recipes")} strokeWidth="1.6" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <span style={label("recipes")}>Recipes</span>
+      </button>
+
+      {/* Shopping tab */}
+      <button onClick={()=>setView("storeSelect")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font,position:"relative"}}>
+        <div style={pill("storeSelect")}>
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M2 2h3l2 10h10l2-7H6" stroke={ic("storeSelect")} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="9" cy="17" r="1.5" fill={ic("storeSelect")}/>
+            <circle cx="16" cy="17" r="1.5" fill={ic("storeSelect")}/>
+          </svg>
+          {totalItems>0&&(
+            <span style={{position:"absolute",top:-2,right:8,background:M3.error,color:M3.onError,borderRadius:"50%",fontSize:9,width:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>
+              {totalItems>99?"99+":totalItems}
             </span>
-          </button>
-        );
-      })}
+          )}
+        </div>
+        <span style={label("storeSelect")}>Shopping</span>
+      </button>
+
+      {/* Import tab */}
+      <button onClick={()=>setView("import")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font}}>
+        <div style={pill("import")}>
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <circle cx="11" cy="11" r="8.5" stroke={ic("import")} strokeWidth="1.6"/>
+            <path d="M11 7v8M8 13l3 3 3-3" stroke={ic("import")} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <span style={label("import")}>Import</span>
+      </button>
+
     </div>
   );
 }
@@ -518,7 +509,7 @@ export default function App() {
           );
         })}
       </div>
-      <BottomNav view={view} setView={setView} totalItems={totalItems} M3={M3} font={font} photoInputRef={photoInputRef}/>
+      <BottomNav view={view} setView={setView} totalItems={totalItems}/>
     </div>
   );
 
@@ -686,7 +677,7 @@ export default function App() {
           </div>
         ))}
       </div>
-      <BottomNav view={view} setView={setView} totalItems={totalItems} M3={M3} font={font} photoInputRef={photoInputRef}/>
+      <BottomNav view={view} setView={setView} totalItems={totalItems}/>
     );
   }
 
@@ -787,7 +778,7 @@ export default function App() {
         </div>
       </div>
 
-      <BottomNav view={view} setView={setView} totalItems={totalItems} M3={M3} font={font} photoInputRef={photoInputRef}/>
+      <BottomNav view={view} setView={setView} totalItems={totalItems}/>
     </div>
   );
 
@@ -975,7 +966,7 @@ export default function App() {
         <button onClick={()=>setSortAZ(v=>!v)} style={{padding:"9px 14px",borderRadius:20,border:`1px solid ${M3.outlineVariant}`,background:"transparent",color:M3.onSurfaceVariant,fontSize:12,cursor:"pointer",fontFamily:font,whiteSpace:"nowrap"}}>
           {sortAZ?"A→Z":"Z→A"}
         </button>
-      </div> 
+      </div>
 
       {/* Recipe list */}
       <div style={{padding:"8px 14px 0",paddingBottom:90}}>
@@ -1000,7 +991,7 @@ export default function App() {
       </div>
 
       {/* M3 Bottom Navigation Bar */}
-      <BottomNav view={view} setView={setView} totalItems={totalItems} M3={M3} font={font} photoInputRef={photoInputRef}/>
+      <BottomNav view={view} setView={setView} totalItems={totalItems}/>
     </div>
   );
 }
