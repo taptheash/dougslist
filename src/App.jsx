@@ -239,7 +239,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [sortAZ, setSortAZ] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
-  const [view, setView] = useState("recipes"); // "recipes"|"storeSelect"|"shopping"
+  const [view, setView] = useState("storeSelect"); // "recipes"|"storeSelect"|"shopping"
   const [storeTab, setStoreTab] = useState("mb");
 
   // import
@@ -503,9 +503,9 @@ export default function App() {
   if (view==="storeSelect") return (
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
       <div style={{background:M3.primary,padding:"14px 16px 20px"}}>
-        <BackBtn to="recipes" label="Recipes" setView={setView}/>
+        <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2,marginBottom:12}}>{APP_NAME}</div>
         <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:3}}>Shopping</div>
-        <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary}}>Choose a store</div>
+        <div style={{fontSize:18,fontWeight:500,color:M3.onPrimary}}>Choose a store</div>
       </div>
       <div style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
         {STORES.map(store => {
