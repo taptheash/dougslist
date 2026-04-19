@@ -188,16 +188,6 @@ function BottomNav({ view, setView, totalItems }) {
   return (
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:M3.surface,borderTop:"0.5px solid "+M3.outlineVariant,display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
 
-      {/* Recipes tab */}
-      <button onClick={()=>setView("recipes")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font}}>
-        <div style={pill("recipes")}>
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <path d="M4 6h14M4 11h14M4 16h9" stroke={ic("recipes")} strokeWidth="1.6" strokeLinecap="round"/>
-          </svg>
-        </div>
-        <span style={label("recipes")}>Recipes</span>
-      </button>
-
       {/* Shopping tab */}
       <button onClick={()=>setView("storeSelect")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font,position:"relative"}}>
         <div style={pill("storeSelect")}>
@@ -213,6 +203,16 @@ function BottomNav({ view, setView, totalItems }) {
           )}
         </div>
         <span style={label("storeSelect")}>Shopping</span>
+      </button>
+
+      {/* Recipes tab */}
+      <button onClick={()=>setView("recipes")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font}}>
+        <div style={pill("recipes")}>
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M4 6h14M4 11h14M4 16h9" stroke={ic("recipes")} strokeWidth="1.6" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <span style={label("recipes")}>Recipes</span>
       </button>
 
       {/* Import tab */}
