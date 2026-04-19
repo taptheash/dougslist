@@ -532,21 +532,15 @@ export default function App() {
   // SHOPPING VIEW
   if (view==="shopping") {
     const store=STORES.find(s=>s.id===storeTab);
-
     const targetGrouped={}; TARGET_CATEGORIES.forEach(c=>targetGrouped[c.key]=[]); targetItems.forEach(item=>{(targetGrouped[item.category]||targetGrouped["other"]).push(item);});
     const targetActiveCats=TARGET_CATEGORIES.filter(c=>targetGrouped[c.key]?.length>0);
     const targetTotal=targetItems.length, targetCC=targetItems.filter(i=>targetChecked.has(i.key)).length;
-    const targetPct=targetTotal>0?Math.round((targetCC/targetTotal)*100):0;
-
     const lowesGrouped={}; LOWES_CATEGORIES.forEach(c=>lowesGrouped[c.key]=[]); lowesItems.forEach(item=>{(lowesGrouped[item.category]||lowesGrouped["other"]).push(item);});
     const lowesActiveCats=LOWES_CATEGORIES.filter(c=>lowesGrouped[c.key]?.length>0);
     const lowesTotal=lowesItems.length, lowesCC=lowesItems.filter(i=>lowesChecked.has(i.key)).length;
-    const lowesPct=lowesTotal>0?Math.round((lowesCC/lowesTotal)*100):0;
-
     const cTotal=storeTab==="mb"?total:storeTab==="target"?targetTotal:lowesTotal;
     const cChecked=storeTab==="mb"?checked:storeTab==="target"?targetCC:lowesCC;
-    const cPct=storeTab==="mb"?pct:storeTab==="target"?targetPct:lowesPct;
-
+    const cPct=storeTab==="mb"?pct:storeTab==="target"?Math.round((targetCC/Math.max(targetTotal,1))*100):Math.round((lowesCC/Math.max(lowesTotal,1))*100);
     const addFn=storeTab==="mb"?addManual:storeTab==="target"?addTargetItem:addLowesItem;
     const inputVal=storeTab==="mb"?manualInput:storeTab==="target"?targetInput:lowesInput;
     const setInputVal=storeTab==="mb"?setManualInput:storeTab==="target"?setTargetInput:setLowesInput;
@@ -554,7 +548,7 @@ export default function App() {
     const setQtyVal=storeTab==="mb"?setManualQty:storeTab==="target"?setTargetQty:setLowesQty;
     const resetFn=storeTab==="mb"?resetShopping:storeTab==="target"?resetTarget:resetLowes;
     const countdown=storeTab==="target"?targetCountdown:storeTab==="lowes"?lowesCountdown:null;
-
+    const sectionLabel = {fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6};
     return (
       <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
         <div style={{background:M3.primary,padding:"14px 16px 14px"}}>
@@ -571,11 +565,9 @@ export default function App() {
           </div>
           <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
             <span style={{fontSize:11,color:M3.onPrimary+"AA"}}>{cChecked} of {cTotal} items</span>
-            <span style={{fontSize:11,color:M3.onPrimary+"AA"}}>{cPct}%{countdown?` · ${countdown}`:""}</span>
+            <span style={{fontSize:11,color:M3.onPrimary+"AA"}}>{cPct}%{countdown?" · "+countdown:""}</span>
           </div>
         </div>
-
-        {/* Add item row */}
         <div style={{padding:"12px 14px 6px"}}>
           <div style={{display:"flex",gap:8}}>
             <input type="number" min={1} max={99} value={qtyVal} onChange={e=>setQtyVal(e.target.value)} placeholder="1"
@@ -586,36 +578,33 @@ export default function App() {
           </div>
           {storeTab==="mb"&&checkedIds.size>0&&<div style={{fontSize:12,color:M3.onSurfaceVariant,marginTop:6,fontStyle:"italic"}}>Recipes: {recipes.filter(r=>checkedIds.has(r.id)).map(r=>r.title).join(", ")}</div>}
         </div>
-
-        {/* MB sections */}
-        {storeTab==="mb" && total===0 && (
-          <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>No items yet. Check recipes or add items above.</p>
-        )}
+        {storeTab==="mb" && total===0 && <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>No items yet. Check recipes or add items above.</p>}
         {storeTab==="mb" && total>0 && (
           <div style={{padding:"4px 0"}}>
             {activeSections.map(sec=>(
               <div key={sec.key} style={{margin:"10px 14px 0"}}>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6}}>{sec.label}</div>
+                <div style={sectionLabel}>{sec.label}</div>
                 {grouped[sec.key].filter(item=>!checkedItems.has(item.key)).map(item=>{
                   const isEd=editingKey===item.key;
-                  const recipeNames=item.recipeList||[item.recipe];
+                  const rnames=item.recipeList||[item.recipe];
                   return (
                     <div key={item.key} style={{background:M3.surface,borderRadius:12,border:"0.5px solid "+M3.outlineVariant,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10}}>
                       <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+M3.outline,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:2}}/>
                       <div style={{flex:1,minWidth:0}}>
-                        {isEd?(
-                          <input autoFocus value={editingText} onChange={e=>setEditingText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEdit(item.key);if(e.key==="Escape")setEditingKey(null);}} onBlur={()=>saveEdit(item.key)}
-                            style={{width:"100%",fontSize:14,padding:"3px 8px",border:"1.5px solid "+M3.primary,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box",background:M3.surface,color:M3.onSurface}}/>
-                        ):(
-                          <>
-                            <div onClick={()=>toggleItem(item.key)} style={{fontSize:14,color:M3.onSurface,cursor:"pointer"}}>{item.text}</div>
-                            <div style={{marginTop:3,display:"flex",flexWrap:"wrap",gap:4}}>
-                              {recipeNames.map((name,idx)=>{ const r=recipes.find(r=>r.title===name.trim()); return r?(
-                                <span key={idx} onClick={()=>{setSelectedId(r.id);setView("recipes");}} style={{fontSize:11,color:M3.primary,fontStyle:"italic",textDecoration:"underline",cursor:"pointer"}}>{name}{idx<recipeNames.length-1?",":""}</span>
-                              ):(<span key={idx} style={{fontSize:11,color:M3.onSurfaceVariant,fontStyle:"italic"}}>{name}</span>); })}
+                        {isEd
+                          ? <input autoFocus value={editingText} onChange={e=>setEditingText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEdit(item.key);if(e.key==="Escape")setEditingKey(null);}} onBlur={()=>saveEdit(item.key)} style={{width:"100%",fontSize:14,padding:"3px 8px",border:"1.5px solid "+M3.primary,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box",background:M3.surface,color:M3.onSurface}}/>
+                          : <div>
+                              <div onClick={()=>toggleItem(item.key)} style={{fontSize:14,color:M3.onSurface,cursor:"pointer"}}>{item.text}</div>
+                              <div style={{marginTop:3,display:"flex",flexWrap:"wrap",gap:4}}>
+                                {rnames.map((name,idx)=>{
+                                  const r=recipes.find(r=>r.title===name.trim());
+                                  return r
+                                    ? <span key={idx} onClick={()=>{setSelectedId(r.id);setView("recipes");}} style={{fontSize:11,color:M3.primary,fontStyle:"italic",textDecoration:"underline",cursor:"pointer"}}>{name}{idx<rnames.length-1?",":""}</span>
+                                    : <span key={idx} style={{fontSize:11,color:M3.onSurfaceVariant,fontStyle:"italic"}}>{name}</span>;
+                                })}
+                              </div>
                             </div>
-                          </>
-                        )}
+                        }
                       </div>
                       <span onClick={e=>startEdit(item.key,item.text,e)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✎</span>
                       <span onClick={()=>removeItem(item.key)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✕</span>
@@ -625,7 +614,7 @@ export default function App() {
                 })}
               </div>
             ))}
-            {completedItems.length>0&&(
+            {completedItems.length>0 && (
               <div style={{margin:"16px 14px 0"}}>
                 <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
                   <svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke={M3.success} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -633,7 +622,7 @@ export default function App() {
                 </div>
                 {completedItems.map(item=>{
                   const sec=STORE_SECTIONS.find(s=>s.key===item.sectionKey);
-                  const recipeNames=item.recipeList||[item.recipe];
+                  const rnames=item.recipeList||[item.recipe];
                   return (
                     <div key={item.key} style={{background:M3.surface,borderRadius:12,border:"0.5px solid "+M3.outlineVariant,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10,opacity:0.5}}>
                       <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+M3.primary,background:M3.primary,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:2}}>
@@ -642,7 +631,7 @@ export default function App() {
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,textDecoration:"line-through",color:M3.onSurfaceVariant}}>{item.text}</div>
                         <div style={{marginTop:2,display:"flex",flexWrap:"wrap",gap:4}}>
-                          {recipeNames.map((name,idx)=>(<span key={idx} style={{fontSize:11,color:M3.onSurfaceVariant,fontStyle:"italic"}}>{name}{idx<recipeNames.length-1?",":""}</span>))}
+                          {rnames.map((name,idx)=><span key={idx} style={{fontSize:11,color:M3.onSurfaceVariant,fontStyle:"italic"}}>{name}{idx<rnames.length-1?",":""}</span>)}
                         </div>
                       </div>
                       <span onClick={()=>removeItem(item.key)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✕</span>
@@ -654,40 +643,33 @@ export default function App() {
             )}
           </div>
         )}
-
-        {/* Target sections */}
-        {storeTab==="target" && targetTotal===0 && (
-          <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>No items yet. Add above.</p>
-        )}
+        {storeTab==="target" && targetTotal===0 && <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>No items yet. Add above.</p>}
         {storeTab==="target" && targetTotal>0 && (
           <div style={{padding:"4px 0"}}>
             {targetActiveCats.map(cat=>(
               <div key={cat.key} style={{margin:"10px 14px 0"}}>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6}}>{cat.label}</div>
+                <div style={sectionLabel}>{cat.label}</div>
                 {targetGrouped[cat.key].map(item=><GenericItem key={item.key} item={item} storeColor={store.color} done={targetChecked.has(item.key)} onToggle={toggleTargetItem} onRemove={removeTargetItem}/>)}
               </div>
             ))}
           </div>
         )}
-
-        {/* Lowe's sections */}
-        {storeTab==="lowes" && lowesTotal===0 && (
-          <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>No items yet. Add above.</p>
-        )}
+        {storeTab==="lowes" && lowesTotal===0 && <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>No items yet. Add above.</p>}
         {storeTab==="lowes" && lowesTotal>0 && (
           <div style={{padding:"4px 0"}}>
             {lowesActiveCats.map(cat=>(
               <div key={cat.key} style={{margin:"10px 14px 0"}}>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6}}>{cat.label}</div>
+                <div style={sectionLabel}>{cat.label}</div>
                 {lowesGrouped[cat.key].map(item=><GenericItem key={item.key} item={item} storeColor={store.color} done={lowesChecked.has(item.key)} onToggle={toggleLowesItem} onRemove={removeLowesItem}/>)}
               </div>
             ))}
           </div>
         )}
+        <BottomNav view={view} setView={setView} totalItems={totalItems}/>
       </div>
-      <BottomNav view={view} setView={setView} totalItems={totalItems}/>
     );
   }
+
 
   // ════════════════════════════════════════════════════════════════════════════
   // IMPORT SCREEN
