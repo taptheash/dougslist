@@ -175,8 +175,6 @@ export default function App() {
   const [editingKey, setEditingKey] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [view, setView] = useState("recipes");
-  const [countdown, setCountdown] = useState(null);
-  const timerRef = useRef(null);
   const [wakeLock, setWakeLock] = useState(null);
   const [wakeActive, setWakeActive] = useState(false);
 
@@ -259,21 +257,6 @@ export default function App() {
         setCheckedItems(new Set(data.checkedItems || []));
         setManualItems(data.manualItems || []);
         setRemovedKeys(new Set(data.removedKeys || []));
-        if (data.resetAt && !timerRef.current) {
-          const rem = data.resetAt - Date.now();
-          if (rem <= 0) {
-            setDoc(doc(db, "app", "shopping"), { checkedIds:[], checkedItems:[], manualItems:[], removedKeys:[], resetAt:null }, { merge: true });
-            setCheckedIds(new Set()); setCheckedItems(new Set()); setManualItems([]); setRemovedKeys(new Set());
-          } else {
-            resetAtRef.current = data.resetAt;
-            timerRef.current = setInterval(() => {
-              const r = data.resetAt - Date.now();
-              if (r <= 0) { resetShopping(); return; }
-              const m = Math.floor(r/60000), s = Math.floor((r%60000)/1000);
-              setCountdown(`↺ Auto-reset in ${m}:${String(s).padStart(2,"0")}`);
-            }, 1000);
-          }
-        }
       }
       shoppingLoaded.current = true;
     });
@@ -475,34 +458,13 @@ export default function App() {
   const total=allShoppingItems.length;
   const checked=allShoppingItems.filter(item=>checkedItems.has(item.key)).length;
   const pct=total>0?Math.round((checked/total)*100):0;
-  const activeSections=STORE_SECTIONS.filter(s=>grouped[s.key]?.length>0);
-
-  const resetAtRef = useRef(null);
-  useEffect(() => {
-    if (total>0&&checked===total) {
-      if (timerRef.current) return;
-      const end = resetAtRef.current || Date.now()+60*60*1000;
-      resetAtRef.current = end;
-      saveShoppingState({ resetAt: end });
-      timerRef.current=setInterval(()=>{
-        const rem=end-Date.now();
-        if (rem<=0){resetShopping();return;}
-        const m=Math.floor(rem/60000),s=Math.floor((rem%60000)/1000);
-        setCountdown(`↺ Auto-reset in ${m}:${String(s).padStart(2,"0")}`);
-      },1000);
-    } else {
-      if (timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}
-      resetAtRef.current = null;
-      setCountdown(null);
-    }
-  }, [checked, total]);
+  const activeSections=STORE_SECTIONS.filter(s=>grouped[s.key]?.some(item=>!checkedItems.has(item.key)));
+  const completedItems=allShoppingItems.filter(item=>checkedItems.has(item.key));
 
   const resetShopping = () => {
     const empty = { checkedIds:[], checkedItems:[], manualItems:[], removedKeys:[], resetAt:null };
     setCheckedIds(new Set()); setCheckedItems(new Set()); setManualItems([]); setRemovedKeys(new Set());
     setEditingKey(null);
-    if (timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}
-    resetAtRef.current = null; setCountdown(null);
     saveShoppingState(empty);
   };
 
@@ -794,7 +756,6 @@ Return ONLY the formatted recipe, nothing else.`;
           <span><strong style={{color:storeColor}}>{currentChecked}</strong> of <strong style={{color:storeColor}}>{currentTotal}</strong> items &nbsp;
             <span style={{color:"#aaa",fontSize:12}}>{currentTotal-currentChecked>0?`· ${currentTotal-currentChecked} remaining`:"· all done!"}</span>
           </span>
-          {storeTab==="mb"&&countdown&&<span style={{color:storeColor,fontWeight:600,fontSize:12}}>{countdown}</span>}
           {storeTab==="target"&&targetCountdown&&<span style={{color:storeColor,fontWeight:600,fontSize:12}}>{targetCountdown}</span>}
           {storeTab==="lowes"&&lowesCountdown&&<span style={{color:storeColor,fontWeight:600,fontSize:12}}>{lowesCountdown}</span>}
           <button onClick={()=>setView("recipes")} style={{background:"transparent",border:`1px solid ${storeColor}`,color:storeColor,borderRadius:6,padding:"4px 12px",fontSize:12,cursor:"pointer",fontFamily:font}}>← Back</button>
@@ -814,18 +775,16 @@ Return ONLY the formatted recipe, nothing else.`;
               <p style={{textAlign:"center",padding:"40px 20px",color:"#888",fontStyle:"italic"}}>No items yet. Check recipes or add items above.</p>
             ):(
               <div style={{padding:"8px 0"}}>
+                {/* Active (unchecked) sections */}
                 {activeSections.map(sec=>(
                   <div key={sec.key} style={{margin:"10px 16px 0"}}>
                     <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:"#888",padding:"6px 4px 4px",borderBottom:"1px solid #ddd",marginBottom:4}}>{sec.label}</div>
-                    {grouped[sec.key].map(item=>{
-                      const done=checkedItems.has(item.key);
+                    {grouped[sec.key].filter(item=>!checkedItems.has(item.key)).map(item=>{
                       const isEditingThis=editingKey===item.key;
                       const recipeNames=item.recipeList||[item.recipe];
                       return (
-                        <div key={item.key} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 10px",background:"white",borderRadius:8,marginBottom:5,border:"1px solid #eee",opacity:done?0.5:1}}>
-                          <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${done?MB_RED:"#ccc"}`,background:done?MB_RED:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:3}}>
-                            {done&&<span style={{color:"white",fontSize:11,fontWeight:700}}>✓</span>}
-                          </div>
+                        <div key={item.key} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 10px",background:"white",borderRadius:8,marginBottom:5,border:"1px solid #eee"}}>
+                          <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid #ccc`,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:3}}/>
                           <div style={{flex:1,minWidth:0}}>
                             {isEditingThis?(
                               <input autoFocus value={editingText} onChange={e=>setEditingText(e.target.value)}
@@ -834,7 +793,7 @@ Return ONLY the formatted recipe, nothing else.`;
                                 style={{width:"100%",fontSize:14,padding:"3px 8px",border:`1.5px solid ${MB_RED}`,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box"}}/>
                             ):(
                               <>
-                                <div onClick={()=>toggleItem(item.key)} style={{fontSize:15,textDecoration:done?"line-through":"none",color:done?"#aaa":"#222",cursor:"pointer"}}>{item.text}</div>
+                                <div onClick={()=>toggleItem(item.key)} style={{fontSize:15,color:"#222",cursor:"pointer"}}>{item.text}</div>
                                 <div style={{marginTop:3,display:"flex",flexWrap:"wrap",gap:4}}>
                                   {recipeNames.map((name,idx)=>{
                                     const r=recipes.find(r=>r.title===name.trim());
@@ -858,6 +817,43 @@ Return ONLY the formatted recipe, nothing else.`;
                     })}
                   </div>
                 ))}
+
+                {/* Completed section */}
+                {completedItems.length > 0 && (
+                  <div style={{margin:"18px 16px 0"}}>
+                    <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:"#bbb",padding:"6px 4px 4px",borderBottom:"1px solid #e0e0d8",marginBottom:4,display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{color:"#22c55e"}}>✓</span> Completed ({completedItems.length})
+                    </div>
+                    {completedItems.map(item=>{
+                      const sec = STORE_SECTIONS.find(s=>s.key===item.sectionKey);
+                      const recipeNames=item.recipeList||[item.recipe];
+                      return (
+                        <div key={item.key} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 10px",background:"white",borderRadius:8,marginBottom:5,border:"1px solid #eee",opacity:0.55}}>
+                          <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${MB_RED}`,background:MB_RED,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:3}}>
+                            <span style={{color:"white",fontSize:11,fontWeight:700}}>✓</span>
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div onClick={()=>toggleItem(item.key)} style={{fontSize:15,textDecoration:"line-through",color:"#aaa",cursor:"pointer"}}>{item.text}</div>
+                            <div style={{marginTop:3,display:"flex",flexWrap:"wrap",gap:4}}>
+                              {recipeNames.map((name,idx)=>{
+                                const r=recipes.find(r=>r.title===name.trim());
+                                return r?(
+                                  <span key={idx} onClick={()=>{setSelectedId(r.id);setView("recipes");}} style={{fontSize:11,color:"#ccc",fontStyle:"italic",textDecoration:"underline",cursor:"pointer"}}>
+                                    {name}{idx<recipeNames.length-1?",":""}
+                                  </span>
+                                ):(
+                                  <span key={idx} style={{fontSize:11,color:"#ccc",fontStyle:"italic"}}>{name}</span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <span onClick={()=>removeItem(item.key)} style={{fontSize:13,color:"#ddd",cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✕</span>
+                          {sec&&<span style={{fontSize:10,color:"#ccc",background:"#f5f5f0",borderRadius:4,padding:"2px 6px",border:"1px solid #e8e8e2",whiteSpace:"nowrap",flexShrink:0}}>A{sec.aisle}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
