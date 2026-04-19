@@ -933,10 +933,11 @@ export default function App() {
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
       {/* Sticky header */}
       <div style={{background:M3.primary,padding:"14px 16px 0",position:"sticky",top:0,zIndex:100}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
           <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2}}>{APP_NAME}</div>
           <BackBtn to="storeSelect" label="Home" setView={setView}/>
         </div>
+        <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:8}}>Recipes</div>
 
         {/* Category chips */}
         <div style={{display:"flex",overflowX:"auto",scrollbarWidth:"none",gap:6,paddingBottom:10}}>
