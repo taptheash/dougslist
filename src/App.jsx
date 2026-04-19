@@ -48,7 +48,7 @@ const STORES = [
 // ── Shared input style ───────────────────────────────────────────────────────
 const inp = {
   width:"100%", padding:"10px 12px",
-  border:`1px solid ${M3.outlineVariant}`, borderRadius:8,
+  border:"1px solid "+M3.outlineVariant, borderRadius:8,
   fontSize:14, fontFamily:font,
   background:M3.surface, color:M3.onSurface,
   boxSizing:"border-box", outline:"none",
@@ -103,7 +103,7 @@ function StepTimer({ seconds, stepText }) {
   const fg = done ? M3.success : M3.primary;
   return (
     <div onClick={e=>{e.stopPropagation();if(done){reset(e);}else{setRunning(r=>!r);}}}
-      style={{display:"inline-flex",alignItems:"center",gap:8,marginTop:8,background:bg,borderRadius:20,padding:"5px 12px 5px 8px",cursor:"pointer",border:`1px solid ${done?M3.success:M3.outline}`}}>
+      style={{display:"inline-flex",alignItems:"center",gap:8,marginTop:8,background:bg,borderRadius:20,padding:"5px 12px 5px 8px",cursor:"pointer",border:"1px solid "+(done?M3.success:M3.outline)}}>
       <svg width="22" height="22" viewBox="0 0 22 22" style={{flexShrink:0}}>
         <circle cx="11" cy="11" r="9" fill="none" stroke={M3.outlineVariant} strokeWidth="2.5"/>
         {!done&&<circle cx="11" cy="11" r="9" fill="none" stroke={running?M3.primary:M3.secondary} strokeWidth="2.5" strokeDasharray={`${2*Math.PI*9}`} strokeDashoffset={`${2*Math.PI*9*(1-pct/100)}`} strokeLinecap="round" transform="rotate(-90 11 11)" style={{transition:"stroke-dashoffset 0.9s linear"}}/>}
@@ -156,8 +156,8 @@ function BackBtn({ to, label, setView }) {
 // ── Generic shopping list item ────────────────────────────────────────────────
 function GenericItem({ item, done, onToggle, onRemove, storeColor }) {
   return (
-    <div style={{background:M3.surface,borderRadius:12,border:`0.5px solid ${M3.outlineVariant}`,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"center",gap:10,opacity:done?0.5:1}}>
-      <div onClick={()=>onToggle(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${done?storeColor:M3.outline}`,background:done?storeColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
+    <div style={{background:M3.surface,borderRadius:12,border:"0.5px solid "+M3.outlineVariant,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"center",gap:10,opacity:done?0.5:1}}>
+      <div onClick={()=>onToggle(item.key)} style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+(done?storeColor:M3.outline),background:done?storeColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
         {done&&<svg width="10" height="10" viewBox="0 0 10 10"><polyline points="2,5 4,7 8,3" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
       </div>
       <div onClick={()=>onToggle(item.key)} style={{flex:1,fontSize:14,textDecoration:done?"line-through":"none",color:done?M3.onSurfaceVariant:M3.onSurface,cursor:"pointer"}}>{item.text}</div>
@@ -186,7 +186,7 @@ function BottomNav({ view, setView, totalItems }) {
   const ic = (id) => activeTab===id ? M3.primary : M3.onSurfaceVariant;
 
   return (
-    <div style={{position:"fixed",bottom:0,left:0,right:0,background:M3.surface,borderTop:`0.5px solid ${M3.outlineVariant}`,display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
+    <div style={{position:"fixed",bottom:0,left:0,right:0,background:M3.surface,borderTop:"0.5px solid "+M3.outlineVariant,display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
 
       {/* Recipes tab */}
       <button onClick={()=>setView("recipes")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font}}>
@@ -504,7 +504,7 @@ export default function App() {
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
       <div style={{background:M3.primary,padding:"14px 16px 20px"}}>
         <BackBtn to="recipes" label="Recipes" setView={setView}/>
-        <div style={{fontSize:11,color:`${M3.onPrimary}99`,letterSpacing:1.2,marginBottom:3}}>Shopping</div>
+        <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:3}}>Shopping</div>
         <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary}}>Choose a store</div>
       </div>
       <div style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
@@ -512,7 +512,7 @@ export default function App() {
           const count=store.id==="mb"?mbCount:store.id==="target"?targetCount:lowesCount;
           return (
             <div key={store.id} onClick={()=>{setStoreTab(store.id);setView("shopping");}}
-              style={{background:M3.surface,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,padding:"16px 18px",display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}>
+              style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,padding:"16px 18px",display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}>
               <div style={{width:48,height:48,borderRadius:12,background:store.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>{store.emoji}</div>
               <div style={{flex:1}}>
                 <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>{store.label}</div>
@@ -561,17 +561,17 @@ export default function App() {
           <BackBtn to="storeSelect" label="Stores" setView={setView}/>
           <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontSize:11,color:`${M3.onPrimary}99`,letterSpacing:1.2,marginBottom:2}}>{store.label}</div>
+              <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:2}}>{store.label}</div>
               <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary}}>Shopping list</div>
             </div>
-            <button onClick={resetFn} style={{background:"transparent",color:M3.primaryContainer,border:`1px solid ${M3.primaryContainer}`,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500}}>Reset</button>
+            <button onClick={resetFn} style={{background:"transparent",color:M3.primaryContainer,border:"1px solid "+M3.primaryContainer,borderRadius:20,padding:"5px 14px",fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500}}>Reset</button>
           </div>
-          <div style={{marginTop:12,background:`${M3.onPrimary}30`,borderRadius:4,height:4,overflow:"hidden"}}>
+          <div style={{marginTop:12,background:M3.onPrimary+"30",borderRadius:4,height:4,overflow:"hidden"}}>
             <div style={{background:cPct===100?M3.successContainer:M3.onPrimary,width:cPct+"%",height:4,borderRadius:4,transition:"width 0.4s ease"}}/>
           </div>
           <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
-            <span style={{fontSize:11,color:`${M3.onPrimary}AA`}}>{cChecked} of {cTotal} items</span>
-            <span style={{fontSize:11,color:`${M3.onPrimary}AA`}}>{cPct}%{countdown?` · ${countdown}`:""}</span>
+            <span style={{fontSize:11,color:M3.onPrimary+"AA"}}>{cChecked} of {cTotal} items</span>
+            <span style={{fontSize:11,color:M3.onPrimary+"AA"}}>{cPct}%{countdown?` · ${countdown}`:""}</span>
           </div>
         </div>
 
@@ -579,9 +579,9 @@ export default function App() {
         <div style={{padding:"12px 14px 6px"}}>
           <div style={{display:"flex",gap:8}}>
             <input type="number" min={1} max={99} value={qtyVal} onChange={e=>setQtyVal(e.target.value)} placeholder="1"
-              style={{width:52,padding:"9px 6px",borderRadius:8,border:`1px solid ${M3.outlineVariant}`,fontSize:14,fontFamily:font,background:M3.surface,textAlign:"center",color:M3.onSurface}}/>
+              style={{width:52,padding:"9px 6px",borderRadius:8,border:"1px solid "+M3.outlineVariant,fontSize:14,fontFamily:font,background:M3.surface,textAlign:"center",color:M3.onSurface}}/>
             <input value={inputVal} onChange={e=>setInputVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addFn()} placeholder="Add item…"
-              style={{flex:1,padding:"9px 14px",borderRadius:8,border:`1px solid ${M3.outlineVariant}`,fontSize:14,fontFamily:font,background:M3.surface,color:M3.onSurface,outline:"none"}}/>
+              style={{flex:1,padding:"9px 14px",borderRadius:8,border:"1px solid "+M3.outlineVariant,fontSize:14,fontFamily:font,background:M3.surface,color:M3.onSurface,outline:"none"}}/>
             <button onClick={addFn} style={{background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,cursor:"pointer",fontWeight:500,fontFamily:font}}>Add</button>
           </div>
           {storeTab==="mb"&&checkedIds.size>0&&<div style={{fontSize:12,color:M3.onSurfaceVariant,marginTop:6,fontStyle:"italic"}}>Recipes: {recipes.filter(r=>checkedIds.has(r.id)).map(r=>r.title).join(", ")}</div>}
@@ -595,17 +595,17 @@ export default function App() {
           <div style={{padding:"4px 0"}}>
             {activeSections.map(sec=>(
               <div key={sec.key} style={{margin:"10px 14px 0"}}>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:`0.5px solid ${M3.outlineVariant}`,marginBottom:6}}>{sec.label}</div>
+                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6}}>{sec.label}</div>
                 {grouped[sec.key].filter(item=>!checkedItems.has(item.key)).map(item=>{
                   const isEd=editingKey===item.key;
                   const recipeNames=item.recipeList||[item.recipe];
                   return (
-                    <div key={item.key} style={{background:M3.surface,borderRadius:12,border:`0.5px solid ${M3.outlineVariant}`,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10}}>
-                      <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${M3.outline}`,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:2}}/>
+                    <div key={item.key} style={{background:M3.surface,borderRadius:12,border:"0.5px solid "+M3.outlineVariant,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10}}>
+                      <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+M3.outline,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:2}}/>
                       <div style={{flex:1,minWidth:0}}>
                         {isEd?(
                           <input autoFocus value={editingText} onChange={e=>setEditingText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEdit(item.key);if(e.key==="Escape")setEditingKey(null);}} onBlur={()=>saveEdit(item.key)}
-                            style={{width:"100%",fontSize:14,padding:"3px 8px",border:`1.5px solid ${M3.primary}`,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box",background:M3.surface,color:M3.onSurface}}/>
+                            style={{width:"100%",fontSize:14,padding:"3px 8px",border:"1.5px solid "+M3.primary,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box",background:M3.surface,color:M3.onSurface}}/>
                         ):(
                           <>
                             <div onClick={()=>toggleItem(item.key)} style={{fontSize:14,color:M3.onSurface,cursor:"pointer"}}>{item.text}</div>
@@ -627,7 +627,7 @@ export default function App() {
             ))}
             {completedItems.length>0&&(
               <div style={{margin:"16px 14px 0"}}>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:`0.5px solid ${M3.outlineVariant}`,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
+                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
                   <svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke={M3.success} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   Completed ({completedItems.length})
                 </div>
@@ -635,8 +635,8 @@ export default function App() {
                   const sec=STORE_SECTIONS.find(s=>s.key===item.sectionKey);
                   const recipeNames=item.recipeList||[item.recipe];
                   return (
-                    <div key={item.key} style={{background:M3.surface,borderRadius:12,border:`0.5px solid ${M3.outlineVariant}`,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10,opacity:0.5}}>
-                      <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${M3.primary}`,background:M3.primary,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:2}}>
+                    <div key={item.key} style={{background:M3.surface,borderRadius:12,border:"0.5px solid "+M3.outlineVariant,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10,opacity:0.5}}>
+                      <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+M3.primary,background:M3.primary,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:2}}>
                         <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="2,5 4,7 8,3" stroke={M3.onPrimary} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       </div>
                       <div style={{flex:1,minWidth:0}}>
@@ -663,7 +663,7 @@ export default function App() {
           <div style={{padding:"4px 0"}}>
             {targetActiveCats.map(cat=>(
               <div key={cat.key} style={{margin:"10px 14px 0"}}>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:`0.5px solid ${M3.outlineVariant}`,marginBottom:6}}>{cat.label}</div>
+                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6}}>{cat.label}</div>
                 {targetGrouped[cat.key].map(item=><GenericItem key={item.key} item={item} storeColor={store.color} done={targetChecked.has(item.key)} onToggle={toggleTargetItem} onRemove={removeTargetItem}/>)}
               </div>
             ))}
@@ -678,7 +678,7 @@ export default function App() {
           <div style={{padding:"4px 0"}}>
             {lowesActiveCats.map(cat=>(
               <div key={cat.key} style={{margin:"10px 14px 0"}}>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:`0.5px solid ${M3.outlineVariant}`,marginBottom:6}}>{cat.label}</div>
+                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6}}>{cat.label}</div>
                 {lowesGrouped[cat.key].map(item=><GenericItem key={item.key} item={item} storeColor={store.color} done={lowesChecked.has(item.key)} onToggle={toggleLowesItem} onRemove={removeLowesItem}/>)}
               </div>
             ))}
@@ -694,13 +694,13 @@ export default function App() {
   if (view==="import") return (
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
       <div style={{background:M3.primary,padding:"14px 16px 20px"}}>
-        <div style={{fontSize:11,color:`${M3.onPrimary}99`,letterSpacing:1.2,marginBottom:3}}>Add recipes</div>
+        <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:3}}>Add recipes</div>
         <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary}}>Import</div>
       </div>
 
       <div style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
         {/* Paste text */}
-        <div style={{background:M3.surface,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,overflow:"hidden"}}>
+        <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
           <button onClick={()=>setShowImport(v=>!v)}
             style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
             <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>📝</div>
@@ -713,10 +713,10 @@ export default function App() {
           {showImport&&(
             <div style={{padding:"0 16px 16px"}}>
               <textarea value={importText} onChange={e=>setImportText(e.target.value)}
-                style={{width:"100%",height:160,border:`1px solid ${M3.outlineVariant}`,borderRadius:8,padding:10,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,resize:"vertical",boxSizing:"border-box",outline:"none",lineHeight:1.6}}
+                style={{width:"100%",height:160,border:"1px solid "+M3.outlineVariant,borderRadius:8,padding:10,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,resize:"vertical",boxSizing:"border-box",outline:"none",lineHeight:1.6}}
                 placeholder={"Recipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient\nInstructions:\n1. Step one"}/>
               <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
-                <button onClick={()=>{setShowImport(false);setImportText("");}} style={{padding:"8px 16px",background:"transparent",color:M3.onSurface,border:`1px solid ${M3.outline}`,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Clear</button>
+                <button onClick={()=>{setShowImport(false);setImportText("");}} style={{padding:"8px 16px",background:"transparent",color:M3.onSurface,border:"1px solid "+M3.outline,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Clear</button>
                 <button onClick={async()=>{await handleImport();setView("recipes");}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font,fontWeight:500}}>Save recipe</button>
               </div>
             </div>
@@ -724,7 +724,7 @@ export default function App() {
         </div>
 
         {/* Photo */}
-        <div style={{background:M3.surface,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,overflow:"hidden"}}>
+        <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
           <button onClick={()=>photoInputRef.current?.click()}
             style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
             <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>📷</div>
@@ -752,7 +752,7 @@ export default function App() {
         </div>
 
         {/* URL */}
-        <div style={{background:M3.surface,border:`0.5px solid ${M3.outlineVariant}`,borderRadius:16,overflow:"hidden"}}>
+        <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
           <button onClick={()=>setShowUrlImport(v=>!v)}
             style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
             <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>🔗</div>
@@ -774,9 +774,9 @@ export default function App() {
                   {urlImportError&&<p style={{fontSize:12,color:M3.error,marginBottom:8}}>⚠ {urlImportError}</p>}
                   <input value={urlImportValue} onChange={e=>setUrlImportValue(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleUrlImport()}
                     placeholder="https://example.com/recipes/…"
-                    style={{width:"100%",padding:"10px 12px",border:`1px solid ${M3.outlineVariant}`,borderRadius:8,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,boxSizing:"border-box",outline:"none"}}/>
+                    style={{width:"100%",padding:"10px 12px",border:"1px solid "+M3.outlineVariant,borderRadius:8,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,boxSizing:"border-box",outline:"none"}}/>
                   <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
-                    <button onClick={()=>{setShowUrlImport(false);setUrlImportValue("");setUrlImportError(null);}} style={{padding:"8px 16px",background:"transparent",color:M3.onSurface,border:`1px solid ${M3.outline}`,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Cancel</button>
+                    <button onClick={()=>{setShowUrlImport(false);setUrlImportValue("");setUrlImportError(null);}} style={{padding:"8px 16px",background:"transparent",color:M3.onSurface,border:"1px solid "+M3.outline,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Cancel</button>
                     <button onClick={async()=>{await handleUrlImport();}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font,fontWeight:500}}>Import</button>
                   </div>
                 </>
@@ -810,11 +810,11 @@ export default function App() {
                   <>
                     <span style={{fontSize:12,color:M3.errorContainer}}>Delete?</span>
                     <button onClick={()=>deleteRecipe(selected.id)} style={{padding:"5px 12px",background:M3.error,border:"none",borderRadius:20,color:M3.onError,fontSize:12,cursor:"pointer",fontFamily:font}}>Delete</button>
-                    <button onClick={()=>setConfirmDelete(false)} style={{padding:"5px 12px",background:"transparent",border:`1px solid ${M3.primaryContainer}`,borderRadius:20,color:M3.primaryContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Cancel</button>
+                    <button onClick={()=>setConfirmDelete(false)} style={{padding:"5px 12px",background:"transparent",border:"1px solid "+M3.primaryContainer,borderRadius:20,color:M3.primaryContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Cancel</button>
                   </>
                 ):(
                   <>
-                    <button onClick={()=>setConfirmDelete(true)} style={{padding:"5px 12px",background:"transparent",border:`1px solid ${M3.errorContainer}`,borderRadius:20,color:M3.errorContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Delete</button>
+                    <button onClick={()=>setConfirmDelete(true)} style={{padding:"5px 12px",background:"transparent",border:"1px solid "+M3.errorContainer,borderRadius:20,color:M3.errorContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Delete</button>
                     <button onClick={()=>startEditRecipe(selected)} style={{padding:"5px 14px",background:M3.primaryContainer,border:"none",borderRadius:20,color:M3.onPrimaryContainer,fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500}}>Edit</button>
                   </>
                 )}
@@ -822,7 +822,7 @@ export default function App() {
             )}
             {isEditing&&(
               <div style={{display:"flex",gap:8}}>
-                <button onClick={cancelEditRecipe} style={{padding:"5px 12px",background:"transparent",border:`1px solid ${M3.primaryContainer}`,borderRadius:20,color:M3.primaryContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Cancel</button>
+                <button onClick={cancelEditRecipe} style={{padding:"5px 12px",background:"transparent",border:"1px solid "+M3.primaryContainer,borderRadius:20,color:M3.primaryContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Cancel</button>
                 <button onClick={()=>saveEditRecipe(selected.id)} style={{padding:"5px 14px",background:M3.primaryContainer,border:"none",borderRadius:20,color:M3.onPrimaryContainer,fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500}}>Save</button>
               </div>
             )}
@@ -830,10 +830,10 @@ export default function App() {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div>
               <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,lineHeight:1.2,marginBottom:3}}>{selected.title}</div>
-              <div style={{fontSize:13,color:`${M3.onPrimary}AA`}}>{selected.category}</div>
+              <div style={{fontSize:13,color:M3.onPrimary+"AA"}}>{selected.category}</div>
             </div>
             <div style={{display:"flex",gap:8,alignItems:"center",marginTop:2}}>
-              <button onClick={toggleWakeLock} style={{background:wakeActive?M3.primaryContainer:"transparent",border:`1px solid ${M3.primaryContainer}`,borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:500,color:wakeActive?M3.onPrimaryContainer:M3.primaryContainer,cursor:"pointer",fontFamily:font}}>
+              <button onClick={toggleWakeLock} style={{background:wakeActive?M3.primaryContainer:"transparent",border:"1px solid "+M3.primaryContainer,borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:500,color:wakeActive?M3.onPrimaryContainer:M3.primaryContainer,cursor:"pointer",fontFamily:font}}>
                 {wakeActive?"☀ On":"☀ Off"}
               </button>
               <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:M3.primaryContainer}} onClick={()=>toggleFav(selected.id)}>
@@ -859,7 +859,7 @@ export default function App() {
               <div style={{marginBottom:14}}>
                 <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Servings</label>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <button onClick={()=>setEditDraft(d=>({...d,servings:Math.max(1,(parseInt(d.servings)||1)-1)}))} style={{width:34,height:34,borderRadius:"50%",border:`1.5px solid ${M3.outline}`,background:"transparent",color:M3.primary,fontSize:18,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                  <button onClick={()=>setEditDraft(d=>({...d,servings:Math.max(1,(parseInt(d.servings)||1)-1)}))} style={{width:34,height:34,borderRadius:"50%",border:"1.5px solid "+M3.outline,background:"transparent",color:M3.primary,fontSize:18,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
                   <input type="number" min={1} max={999} value={editDraft.servings} onChange={e=>setEditDraft(d=>({...d,servings:e.target.value}))} onBlur={()=>setEditDraft(d=>({...d,servings:Math.max(1,parseInt(d.servings)||1)}))} style={{...inp,width:70,textAlign:"center",padding:"8px"}}/>
                   <button onClick={()=>setEditDraft(d=>({...d,servings:(parseInt(d.servings)||1)+1}))} style={{width:34,height:34,borderRadius:"50%",background:M3.primary,border:"none",color:M3.onPrimary,fontSize:18,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
                   <span style={{fontSize:12,color:M3.onSurfaceVariant}}>Base: {editDraft.baseServings}</span>
@@ -886,7 +886,7 @@ export default function App() {
             <>
               {/* Servings */}
               <div style={{background:M3.secondaryContainer,borderRadius:16,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:14}}>
-                <div onClick={()=>setServings(selected.id,selected.servings-1)} style={{width:32,height:32,borderRadius:"50%",border:`1.5px solid ${M3.secondary}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                <div onClick={()=>setServings(selected.id,selected.servings-1)} style={{width:32,height:32,borderRadius:"50%",border:"1.5px solid "+M3.secondary,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8" stroke={M3.secondary} strokeWidth="1.5" strokeLinecap="round"/></svg>
                 </div>
                 <div style={{textAlign:"center",minWidth:40}}>
@@ -900,16 +900,16 @@ export default function App() {
               </div>
 
               {selected.ingredients.length>0&&<>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:`1.5px solid ${M3.outlineVariant}`,paddingBottom:6,marginBottom:10,marginTop:20}}>Ingredients</div>
-                {selected.ingredients.map((ing,i)=><div key={i} style={{fontSize:14,padding:"6px 0",borderBottom:`0.5px solid ${M3.outlineVariant}`,color:M3.onSurface}}>{ratio!==1?scaleIngredient(ing,ratio):ing}</div>)}
+                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Ingredients</div>
+                {selected.ingredients.map((ing,i)=><div key={i} style={{fontSize:14,padding:"6px 0",borderBottom:"0.5px solid "+M3.outlineVariant,color:M3.onSurface}}>{ratio!==1?scaleIngredient(ing,ratio):ing}</div>)}
               </>}
 
               {selected.instructions.length>0&&<>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:`1.5px solid ${M3.outlineVariant}`,paddingBottom:6,marginBottom:10,marginTop:20}}>Instructions</div>
+                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Instructions</div>
                 {selected.instructions.map((step,i)=>{
                   const secs=extractTimerSeconds(step);
                   return (
-                    <div key={i} style={{fontSize:14,padding:"8px 0",lineHeight:1.6,display:"flex",gap:12,borderBottom:`0.5px solid ${M3.outlineVariant}`}}>
+                    <div key={i} style={{fontSize:14,padding:"8px 0",lineHeight:1.6,display:"flex",gap:12,borderBottom:"0.5px solid "+M3.outlineVariant}}>
                       <div style={{minWidth:24,height:24,borderRadius:"50%",background:M3.primary,color:M3.onPrimary,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:500,marginTop:2,flexShrink:0}}>{i+1}</div>
                       <div style={{flex:1}}>
                         <div style={{color:M3.onSurface}}>{step}</div>
@@ -921,12 +921,12 @@ export default function App() {
               </>}
 
               {selected.storage&&<>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:`1.5px solid ${M3.outlineVariant}`,paddingBottom:6,marginBottom:10,marginTop:20}}>Storage</div>
+                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Storage</div>
                 <div style={{fontSize:14,lineHeight:1.7,color:M3.onSurface,background:M3.surfaceVariant,borderRadius:12,padding:"12px 14px"}}>{selected.storage}</div>
               </>}
 
               {selected.notes&&<>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:`1.5px solid ${M3.outlineVariant}`,paddingBottom:6,marginBottom:10,marginTop:20}}>Notes</div>
+                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Notes</div>
                 <div style={{fontSize:14,lineHeight:1.7,color:M3.onSurface,background:M3.surfaceVariant,borderRadius:12,padding:"12px 14px"}}>{selected.notes}</div>
               </>}
             </>
@@ -969,9 +969,9 @@ export default function App() {
             <line x1="11" y1="11" x2="14" y2="14" stroke={M3.onSurfaceVariant} strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
           <input placeholder="Search recipes or ingredients…" value={search} onChange={e=>setSearch(e.target.value)}
-            style={{width:"100%",padding:"9px 12px 9px 34px",borderRadius:28,border:`1px solid ${M3.outlineVariant}`,background:M3.surfaceVariant,color:M3.onSurface,fontSize:14,outline:"none",fontFamily:font,boxSizing:"border-box"}}/>
+            style={{width:"100%",padding:"9px 12px 9px 34px",borderRadius:28,border:"1px solid "+M3.outlineVariant,background:M3.surfaceVariant,color:M3.onSurface,fontSize:14,outline:"none",fontFamily:font,boxSizing:"border-box"}}/>
         </div>
-        <button onClick={()=>setSortAZ(v=>!v)} style={{padding:"9px 14px",borderRadius:20,border:`1px solid ${M3.outlineVariant}`,background:"transparent",color:M3.onSurfaceVariant,fontSize:12,cursor:"pointer",fontFamily:font,whiteSpace:"nowrap"}}>
+        <button onClick={()=>setSortAZ(v=>!v)} style={{padding:"9px 14px",borderRadius:20,border:"1px solid "+M3.outlineVariant,background:"transparent",color:M3.onSurfaceVariant,fontSize:12,cursor:"pointer",fontFamily:font,whiteSpace:"nowrap"}}>
           {sortAZ?"A→Z":"Z→A"}
         </button>
       </div>
@@ -983,8 +983,8 @@ export default function App() {
             {search?"No recipes match your search.":activeTab==="Favorites"?"No favorites yet.":"No recipes in this category yet."}
           </p>
         ):filtered.map(r=>(
-          <div key={r.id} style={{background:M3.surface,border:`0.5px solid ${checkedIds.has(r.id)?M3.primary:M3.outlineVariant}`,borderRadius:12,padding:"11px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}}>
-            <div onClick={e=>toggleCheck(r.id,e)} style={{width:22,height:22,borderRadius:6,border:`2px solid ${checkedIds.has(r.id)?M3.primary:M3.outline}`,background:checkedIds.has(r.id)?M3.primary:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+          <div key={r.id} style={{background:M3.surface,border:"0.5px solid "+(checkedIds.has(r.id)?M3.primary:M3.outlineVariant),borderRadius:12,padding:"11px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}}>
+            <div onClick={e=>toggleCheck(r.id,e)} style={{width:22,height:22,borderRadius:6,border:"2px solid "+(checkedIds.has(r.id)?M3.primary:M3.outline),background:checkedIds.has(r.id)?M3.primary:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
               {checkedIds.has(r.id)&&<svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke={M3.onPrimary} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
             </div>
             <div style={{flex:1,cursor:"pointer",minWidth:0}} onClick={()=>setSelectedId(r.id)}>
