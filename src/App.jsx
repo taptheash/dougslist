@@ -143,6 +143,19 @@ const scaleIngredient = (line, ratio) => line.replace(/(\d+\.?\d*\/?\d*)/g, matc
   const v=parseFloat(match)*ratio; if(v%1===0) return v.toString(); return v.toFixed(2).replace(/\.?0+$/,"");
 });
 
+// ── Generic shopping list item ────────────────────────────────────────────────
+function GenericItem({ item, done, onToggle, onRemove, storeColor }) {
+  return (
+    <div style={{background:M3.surface,borderRadius:12,border:`0.5px solid ${M3.outlineVariant}`,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"center",gap:10,opacity:done?0.5:1}}>
+      <div onClick={()=>onToggle(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${done?storeColor:M3.outline}`,background:done?storeColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
+        {done&&<svg width="10" height="10" viewBox="0 0 10 10"><polyline points="2,5 4,7 8,3" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+      </div>
+      <div onClick={()=>onToggle(item.key)} style={{flex:1,fontSize:14,textDecoration:done?"line-through":"none",color:done?M3.onSurfaceVariant:M3.onSurface,cursor:"pointer"}}>{item.text}</div>
+      <span onClick={()=>onRemove(item.key)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 6px"}}>✕</span>
+    </div>
+  );
+}
+
 // ── M3 Bottom Navigation Bar ─────────────────────────────────────────────────
 function BottomNav({ view, setView, totalItems }) {
   const activeTab = (view === "storeSelect" || view === "shopping") ? "storeSelect"
@@ -532,18 +545,6 @@ export default function App() {
     const cChecked=storeTab==="mb"?checked:storeTab==="target"?targetCC:lowesCC;
     const cPct=storeTab==="mb"?pct:storeTab==="target"?targetPct:lowesPct;
 
-    function GenericItem({item,done,onToggle,onRemove}) {
-      return (
-      <div style={{background:M3.surface,borderRadius:12,border:`0.5px solid ${M3.outlineVariant}`,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"center",gap:10,opacity:done?0.5:1}}>
-        <div onClick={()=>onToggle(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${done?store.color:M3.outline}`,background:done?store.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
-          {done&&<svg width="10" height="10" viewBox="0 0 10 10"><polyline points="2,5 4,7 8,3" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-        </div>
-        <div onClick={()=>onToggle(item.key)} style={{flex:1,fontSize:14,textDecoration:done?"line-through":"none",color:done?M3.onSurfaceVariant:M3.onSurface,cursor:"pointer"}}>{item.text}</div>
-        <span onClick={()=>onRemove(item.key)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 6px"}}>✕</span>
-      </div>
-      );
-    }
-
     const addFn=storeTab==="mb"?addManual:storeTab==="target"?addTargetItem:addLowesItem;
     const inputVal=storeTab==="mb"?manualInput:storeTab==="target"?targetInput:lowesInput;
     const setInputVal=storeTab==="mb"?setManualInput:storeTab==="target"?setTargetInput:setLowesInput;
@@ -661,7 +662,7 @@ export default function App() {
             {targetActiveCats.map(cat=>(
               <div key={cat.key} style={{margin:"10px 14px 0"}}>
                 <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:`0.5px solid ${M3.outlineVariant}`,marginBottom:6}}>{cat.label}</div>
-                {targetGrouped[cat.key].map(item=><GenericItem key={item.key} item={item} done={targetChecked.has(item.key)} onToggle={toggleTargetItem} onRemove={removeTargetItem}/>)}
+                {targetGrouped[cat.key].map(item=><GenericItem key={item.key} item={item} storeColor={store.color} done={targetChecked.has(item.key)} onToggle={toggleTargetItem} onRemove={removeTargetItem}/>)}
               </div>
             ))}
           </div>
@@ -676,7 +677,7 @@ export default function App() {
             {lowesActiveCats.map(cat=>(
               <div key={cat.key} style={{margin:"10px 14px 0"}}>
                 <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:`0.5px solid ${M3.outlineVariant}`,marginBottom:6}}>{cat.label}</div>
-                {lowesGrouped[cat.key].map(item=><GenericItem key={item.key} item={item} done={lowesChecked.has(item.key)} onToggle={toggleLowesItem} onRemove={removeLowesItem}/>)}
+                {lowesGrouped[cat.key].map(item=><GenericItem key={item.key} item={item} storeColor={store.color} done={lowesChecked.has(item.key)} onToggle={toggleLowesItem} onRemove={removeLowesItem}/>)}
               </div>
             ))}
           </div>
