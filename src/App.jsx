@@ -975,7 +975,7 @@ export default function App() {
         <button onClick={()=>setSortAZ(v=>!v)} style={{padding:"9px 14px",borderRadius:20,border:`1px solid ${M3.outlineVariant}`,background:"transparent",color:M3.onSurfaceVariant,fontSize:12,cursor:"pointer",fontFamily:font,whiteSpace:"nowrap"}}>
           {sortAZ?"A→Z":"Z→A"}
         </button>
-      </div>
+      </div> 
 
       {/* Recipe list */}
       <div style={{padding:"8px 14px 0",paddingBottom:90}}>
