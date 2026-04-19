@@ -178,10 +178,7 @@ export default function App() {
   const [wakeLock, setWakeLock] = useState(null);
   const [wakeActive, setWakeActive] = useState(false);
 
-  // --- Inline servings editing on list cards ---
-  const [editingServingsId, setEditingServingsId] = useState(null);
-  const [editingServingsVal, setEditingServingsVal] = useState("");
-  const servingsInputRef = useRef(null);
+
 
   const toggleWakeLock = async () => {
     if (wakeActive && wakeLock) {
@@ -230,13 +227,7 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Focus servings input when it opens
-  useEffect(() => {
-    if (editingServingsId && servingsInputRef.current) {
-      servingsInputRef.current.focus();
-      servingsInputRef.current.select();
-    }
-  }, [editingServingsId]);
+
 
   // --- One-time migration ---
   useEffect(() => {
@@ -507,19 +498,7 @@ export default function App() {
     updateDoc(doc(db,"recipes",id), { servings: v });
   };
 
-  // Inline servings handlers for list cards
-  const openServingsEdit = (e, r) => {
-    e.stopPropagation();
-    setEditingServingsId(r.id);
-    setEditingServingsVal(String(r.servings));
-  };
 
-  const commitServingsEdit = (id) => {
-    const v = parseInt(editingServingsVal);
-    if (!isNaN(v) && v >= 1) setServings(id, v);
-    setEditingServingsId(null);
-    setEditingServingsVal("");
-  };
 
   const toggleItem = (key) => {
     setCheckedItems(prev => {
@@ -1232,59 +1211,18 @@ Return ONLY the formatted recipe, nothing else.`;
       <div style={{padding:"12px 12px 0"}}>
         {filtered.length===0?(
           <p style={{textAlign:"center",padding:"40px 20px",color:"#8a6030",fontStyle:"italic"}}>{search?"No recipes match your search.":activeTab==="Favorites"?"No favorites yet.":"No recipes in this category yet."}</p>
-        ):filtered.map(r=>{
-          const isEditingSrv = editingServingsId === r.id;
-          return (
-            <div key={r.id} style={{background:"#fffcf2",border:`1px solid ${kraft}`,borderRadius:8,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
-              {/* Grocery checkbox */}
-              <div onClick={e=>toggleCheck(r.id,e)} style={{width:22,height:22,borderRadius:4,border:`2px solid ${checkedIds.has(r.id)?tabBg:kraft}`,background:checkedIds.has(r.id)?tabBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:cream,fontSize:13,fontWeight:700}}>
-                {checkedIds.has(r.id)?"✓":""}
-              </div>
-
-              {/* Title + category row — tappable to open recipe */}
-              <div style={{flex:1,cursor:"pointer",minWidth:0}} onClick={()=>setSelectedId(r.id)}>
-                <p style={{fontSize:15,fontWeight:500,margin:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.title}</p>
-                <p style={{fontSize:12,color:"#8a6030",marginTop:2,fontStyle:"italic"}}>{r.category}</p>
-              </div>
-
-              {/* Inline servings stepper */}
-              <div onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
-                <button
-                  onClick={e=>{e.stopPropagation();setServings(r.id,r.servings-1);}}
-                  style={{width:24,height:24,borderRadius:6,border:`1.5px solid ${kraft}`,background:"transparent",color:tabBg,fontSize:16,lineHeight:1,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
-                  −
-                </button>
-                {isEditingSrv ? (
-                  <input
-                    ref={servingsInputRef}
-                    type="number"
-                    min={1}
-                    value={editingServingsVal}
-                    onChange={e=>setEditingServingsVal(e.target.value)}
-                    onBlur={()=>commitServingsEdit(r.id)}
-                    onKeyDown={e=>{if(e.key==="Enter"||e.key==="Escape")commitServingsEdit(r.id);}}
-                    style={{width:36,padding:"2px 4px",border:`1.5px solid ${tabBg}`,borderRadius:5,textAlign:"center",fontSize:13,fontFamily:font,background:cream,color:darkBrown,outline:"none"}}
-                  />
-                ) : (
-                  <span
-                    onClick={e=>openServingsEdit(e,r)}
-                    title="Tap to type a value"
-                    style={{minWidth:36,textAlign:"center",fontSize:13,fontWeight:600,color:darkBrown,cursor:"text",padding:"2px 4px",borderRadius:5,border:`1.5px solid transparent`,lineHeight:"20px",display:"inline-block"}}>
-                    {r.servings}
-                  </span>
-                )}
-                <button
-                  onClick={e=>{e.stopPropagation();setServings(r.id,r.servings+1);}}
-                  style={{width:24,height:24,borderRadius:6,border:`1.5px solid ${kraft}`,background:"transparent",color:tabBg,fontSize:16,lineHeight:1,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
-                  ＋
-                </button>
-              </div>
-
-              {/* Favorite star */}
-              <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18,flexShrink:0}} onClick={e=>toggleFav(r.id,e)}>{r.favorite?"★":"☆"}</button>
+        ):filtered.map(r=>(
+          <div key={r.id} style={{background:"#fffcf2",border:`1px solid ${kraft}`,borderRadius:8,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
+            <div onClick={e=>toggleCheck(r.id,e)} style={{width:22,height:22,borderRadius:4,border:`2px solid ${checkedIds.has(r.id)?tabBg:kraft}`,background:checkedIds.has(r.id)?tabBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:cream,fontSize:13,fontWeight:700}}>
+              {checkedIds.has(r.id)?"✓":""}
             </div>
-          );
-        })}
+            <div style={{flex:1,cursor:"pointer"}} onClick={()=>setSelectedId(r.id)}>
+              <p style={{fontSize:15,fontWeight:500,margin:0}}>{r.title}</p>
+              <p style={{fontSize:12,color:"#8a6030",marginTop:2,fontStyle:"italic"}}>{r.category} · {r.servings} servings</p>
+            </div>
+            <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18}} onClick={e=>toggleFav(r.id,e)}>{r.favorite?"★":"☆"}</button>
+          </div>
+        ))}
       </div>
     </div>
   );
