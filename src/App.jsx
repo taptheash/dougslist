@@ -146,7 +146,7 @@ const scaleIngredient = (line, ratio) => line.replace(/(\d+\.?\d*\/?\d*)/g, matc
 // ── Back button ───────────────────────────────────────────────────────────────
 function BackBtn({ to, label, setView }) {
   return (
-    <button onClick={()=>setView(to)}
+    <button onClick={()=>{ window.scrollTo(0,0); setView(to); }}
       style={{background:M3.primaryContainer,border:"none",borderRadius:20,padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:font}}>
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke={M3.onPrimaryContainer} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
       <span style={{fontSize:12,fontWeight:500,color:M3.onPrimaryContainer}}>{label}</span>
@@ -294,7 +294,7 @@ export default function App() {
   const [wakeActive, setWakeActive] = useState(false);
 
   // ── Effects ──
-  useEffect(() => { window.scrollTo(0,0); }, []);
+  useEffect(() => { window.scrollTo(0,0); }, [view]);
 
   useEffect(() => {
     const run = async () => {
