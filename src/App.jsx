@@ -685,7 +685,7 @@ Return ONLY the formatted recipe, nothing else.`;
   };
 
   const startEditRecipe = (r) => {
-    setEditDraft({title:r.title,category:r.category,ingredients:r.ingredients.join("\n"),instructions:r.instructions.join("\n"),notes:r.notes||"",storage:r.storage||""});
+    setEditDraft({title:r.title,category:r.category,servings:r.servings,baseServings:r.baseServings,ingredients:r.ingredients.join("\n"),instructions:r.instructions.join("\n"),notes:r.notes||"",storage:r.storage||""});
     setEditingRecipeId(r.id);
   };
 
@@ -693,6 +693,8 @@ Return ONLY the formatted recipe, nothing else.`;
     await updateDoc(doc(db,"recipes",id), {
       title: editDraft.title.trim(),
       category: editDraft.category,
+      servings: Math.max(1, parseInt(editDraft.servings)||1),
+      baseServings: Math.max(1, parseInt(editDraft.baseServings)||parseInt(editDraft.servings)||1),
       ingredients: editDraft.ingredients.split("\n").map(l=>l.replace(/^[-*•]\s*/,"").trim()).filter(Boolean),
       instructions: editDraft.instructions.split("\n").map(l=>l.replace(/^\d+[.)]\s*/,"").trim()).filter(Boolean),
       notes: editDraft.notes||"",
@@ -987,6 +989,23 @@ Return ONLY the formatted recipe, nothing else.`;
                 <select value={editDraft.category} onChange={e=>setEditDraft(d=>({...d,category:e.target.value}))} style={{...inpStyle,background:cream}}>
                   {CATEGORIES.filter(c=>c!=="All"&&c!=="Favorites").map(c=><option key={c} value={c}>{c}</option>)}
                 </select>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:tabBg,display:"block",marginBottom:4}}>Servings</label>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <button onClick={()=>setEditDraft(d=>({...d,servings:Math.max(1,(parseInt(d.servings)||1)-1)}))}
+                    style={{width:30,height:30,borderRadius:6,border:`1.5px solid ${kraft}`,background:"transparent",color:tabBg,fontSize:18,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>−</button>
+                  <input
+                    type="number" min={1} max={999}
+                    value={editDraft.servings}
+                    onChange={e=>setEditDraft(d=>({...d,servings:e.target.value}))}
+                    onBlur={e=>setEditDraft(d=>({...d,servings:Math.max(1,parseInt(d.servings)||1)}))}
+                    style={{...inpStyle,width:64,textAlign:"center",padding:"6px 8px"}}
+                  />
+                  <button onClick={()=>setEditDraft(d=>({...d,servings:(parseInt(d.servings)||1)+1}))}
+                    style={{width:30,height:30,borderRadius:6,border:`1.5px solid ${kraft}`,background:"transparent",color:tabBg,fontSize:18,cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>＋</button>
+                  <span style={{fontSize:12,color:"#aaa",marginLeft:4}}>Base recipe serves {editDraft.baseServings}</span>
+                </div>
               </div>
               <div style={{marginBottom:14}}>
                 <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:tabBg,display:"block",marginBottom:4}}>Ingredients <span style={{fontSize:10,color:"#aaa",textTransform:"none",letterSpacing:0}}>(one per line)</span></label>
