@@ -532,7 +532,8 @@ export default function App() {
     const cChecked=storeTab==="mb"?checked:storeTab==="target"?targetCC:lowesCC;
     const cPct=storeTab==="mb"?pct:storeTab==="target"?targetPct:lowesPct;
 
-    const GenericItem=({item,done,onToggle,onRemove})=>(
+    function GenericItem({item,done,onToggle,onRemove}) {
+      return (
       <div style={{background:M3.surface,borderRadius:12,border:`0.5px solid ${M3.outlineVariant}`,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"center",gap:10,opacity:done?0.5:1}}>
         <div onClick={()=>onToggle(item.key)} style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${done?store.color:M3.outline}`,background:done?store.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
           {done&&<svg width="10" height="10" viewBox="0 0 10 10"><polyline points="2,5 4,7 8,3" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -540,7 +541,8 @@ export default function App() {
         <div onClick={()=>onToggle(item.key)} style={{flex:1,fontSize:14,textDecoration:done?"line-through":"none",color:done?M3.onSurfaceVariant:M3.onSurface,cursor:"pointer"}}>{item.text}</div>
         <span onClick={()=>onRemove(item.key)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 6px"}}>✕</span>
       </div>
-    );
+      );
+    }
 
     const addFn=storeTab==="mb"?addManual:storeTab==="target"?addTargetItem:addLowesItem;
     const inputVal=storeTab==="mb"?manualInput:storeTab==="target"?targetInput:lowesInput;
