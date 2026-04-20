@@ -37,6 +37,7 @@ const M3 = {
   successContainer:     "#C3EFAC",
 };
 const font = "'Google Sans', 'Trebuchet MS', Helvetica, sans-serif";
+const isMobile = navigator.maxTouchPoints > 0 && window.matchMedia("(pointer: coarse)").matches;
 
 // ── Store definitions ────────────────────────────────────────────────────────
 const STORES = [
@@ -714,7 +715,7 @@ export default function App() {
         </div>
 
         {/* Photo — mobile only */}
-        {(()=>{ const isMobile = typeof window !== "undefined" && (navigator.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches); return isMobile ? (
+        {isMobile && (
           <>
             <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
             <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
@@ -744,7 +745,7 @@ export default function App() {
               )}
             </div>
           </>
-        ) : null; })()}
+        )}
 
         {/* URL */}
         <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
