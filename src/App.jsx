@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react"; // you likely have this already
+import { auth, googleProvider } from "./firebase";
+import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import {
