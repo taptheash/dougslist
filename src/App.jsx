@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react"; // you likely have this already
+import { useState, useMemo, useEffect, useRef } from "react";
 import { auth, googleProvider } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
-import { useState, useMemo, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import {
   collection, doc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch
@@ -237,6 +236,15 @@ function BottomNav({ view, setView, totalItems }) {
 
 // ════════════════════════════════════════════════════════════════════════════
 export default function App() {
+  // ── Auth ──
+  const [user, setUser] = useState(undefined); // undefined=loading, null=logged out
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    return unsub;
+  }, []);
+  const handleSignIn = () => signInWithPopup(auth, googleProvider);
+  const handleSignOut = () => signOut(auth);
+
   // ── State ──
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -490,6 +498,25 @@ export default function App() {
   const mbCount=total, targetCount=targetItems.length, lowesCount=lowesItems.length;
   const totalItems=mbCount+targetCount+lowesCount;
 
+  // ── Auth gate ────────────────────────────────────────────────────────────────
+  if (user === undefined) return (
+    <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{fontSize:16,color:M3.onSurfaceVariant}}>Loading…</div>
+    </div>
+  );
+
+  if (!user) return (
+    <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+      <div style={{width:56,height:56,borderRadius:16,background:M3.primaryContainer,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28}}>🛒</div>
+      <div style={{fontSize:24,fontWeight:500,color:M3.onSurface}}>{APP_NAME}</div>
+      <p style={{fontSize:14,color:M3.onSurfaceVariant,margin:0}}>Sign in to access your cookbook and lists.</p>
+      <button onClick={handleSignIn}
+        style={{padding:"12px 28px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:24,fontSize:15,fontWeight:500,cursor:"pointer",fontFamily:font,marginTop:8}}>
+        Sign in with Google
+      </button>
+    </div>
+  );
+
   // ════════════════════════════════════════════════════════════════════════════
   // LOADING
   if (loading) return (
@@ -508,7 +535,10 @@ export default function App() {
   if (view==="storeSelect") return (
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
       <div style={{background:M3.primary,padding:"14px 16px 20px"}}>
-        <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2,marginBottom:12}}>{APP_NAME}</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2}}>{APP_NAME}</div>
+          <button onClick={handleSignOut} style={{fontSize:11,color:M3.onPrimary+"99",background:"transparent",border:"none",cursor:"pointer",fontFamily:font}}>sign out</button>
+        </div>
         <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:3}}>Shopping</div>
         <div style={{fontSize:18,fontWeight:500,color:M3.onPrimary}}>Choose a store</div>
       </div>
@@ -801,7 +831,7 @@ export default function App() {
             <button onClick={()=>{setSelectedId(null);cancelEditRecipe();setConfirmDelete(false);if(wakeLock)wakeLock.release();setWakeActive(false);setWakeLock(null);}}
               style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:6}}>
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 4L6 9l5 5" stroke={M3.primaryContainer} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              <span style={{fontSize:13,color:M3.primaryContainer}}>Recipes</span>
+              <span style={{fontSize:13,color:M3.primaryContainer}}>← Back</span>
             </button>
             {!isEditing&&(
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
