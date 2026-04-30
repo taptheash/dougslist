@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { auth, googleProvider } from "./firebase";
-import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "firebase/auth";
 import { db } from "./firebase";
 import {
   collection, doc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch
@@ -175,24 +175,11 @@ function BottomNav({ view, setView, totalItems }) {
   const activeTab = (view === "storeSelect" || view === "shopping") ? "storeSelect"
     : view === "import" ? "import"
     : "recipes";
-
-  const pill = (id) => ({
-    width:64, height:32, borderRadius:16,
-    background: activeTab===id ? M3.secondaryContainer : "transparent",
-    display:"flex", alignItems:"center", justifyContent:"center",
-    position:"relative",
-  });
-  const label = (id) => ({
-    fontSize:11,
-    color: activeTab===id ? M3.primary : M3.onSurfaceVariant,
-    fontWeight: activeTab===id ? 500 : 400,
-  });
+  const pill = (id) => ({ width:64, height:32, borderRadius:16, background: activeTab===id ? M3.secondaryContainer : "transparent", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" });
+  const label = (id) => ({ fontSize:11, color: activeTab===id ? M3.primary : M3.onSurfaceVariant, fontWeight: activeTab===id ? 500 : 400 });
   const ic = (id) => activeTab===id ? M3.primary : M3.onSurfaceVariant;
-
   return (
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:M3.surface,borderTop:"0.5px solid "+M3.outlineVariant,display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom, 0px)"}}>
-
-      {/* Shopping tab */}
       <button onClick={()=>setView("storeSelect")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font,position:"relative"}}>
         <div style={pill("storeSelect")}>
           <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
@@ -200,36 +187,18 @@ function BottomNav({ view, setView, totalItems }) {
             <circle cx="9" cy="17" r="1.5" fill={ic("storeSelect")}/>
             <circle cx="16" cy="17" r="1.5" fill={ic("storeSelect")}/>
           </svg>
-          {totalItems>0&&(
-            <span style={{position:"absolute",top:-2,right:8,background:M3.error,color:M3.onError,borderRadius:"50%",fontSize:9,width:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>
-              {totalItems>99?"99+":totalItems}
-            </span>
-          )}
+          {totalItems>0&&<span style={{position:"absolute",top:-2,right:8,background:M3.error,color:M3.onError,borderRadius:"50%",fontSize:9,width:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{totalItems>99?"99+":totalItems}</span>}
         </div>
         <span style={label("storeSelect")}>Shopping</span>
       </button>
-
-      {/* Recipes tab */}
       <button onClick={()=>setView("recipes")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font}}>
-        <div style={pill("recipes")}>
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <path d="M4 6h14M4 11h14M4 16h9" stroke={ic("recipes")} strokeWidth="1.6" strokeLinecap="round"/>
-          </svg>
-        </div>
+        <div style={pill("recipes")}><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 6h14M4 11h14M4 16h9" stroke={ic("recipes")} strokeWidth="1.6" strokeLinecap="round"/></svg></div>
         <span style={label("recipes")}>Recipes</span>
       </button>
-
-      {/* Import tab */}
       <button onClick={()=>setView("import")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font}}>
-        <div style={pill("import")}>
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <circle cx="11" cy="11" r="8.5" stroke={ic("import")} strokeWidth="1.6"/>
-            <path d="M11 7v8M8 13l3 3 3-3" stroke={ic("import")} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
+        <div style={pill("import")}><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="8.5" stroke={ic("import")} strokeWidth="1.6"/><path d="M11 7v8M8 13l3 3 3-3" stroke={ic("import")} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
         <span style={label("import")}>Import</span>
       </button>
-
     </div>
   );
 }
@@ -240,9 +209,10 @@ export default function App() {
   const [user, setUser] = useState(undefined); // undefined=loading, null=logged out
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    getRedirectResult(auth).catch(() => {});
     return unsub;
   }, []);
-  const handleSignIn = () => signInWithPopup(auth, googleProvider);
+  const handleSignIn = () => signInWithRedirect(auth, googleProvider);
   const handleSignOut = () => signOut(auth);
 
   // ── State ──
@@ -252,10 +222,8 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [sortAZ, setSortAZ] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
-  const [view, setView] = useState("storeSelect"); // "recipes"|"storeSelect"|"shopping"
+  const [view, setView] = useState("storeSelect");
   const [storeTab, setStoreTab] = useState("mb");
-
-  // import
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
   const [showPhotoImport, setShowPhotoImport] = useState(false);
@@ -266,13 +234,9 @@ export default function App() {
   const [urlImporting, setUrlImporting] = useState(false);
   const [urlImportError, setUrlImportError] = useState(null);
   const photoInputRef = useRef(null);
-
-  // edit
   const [editingRecipeId, setEditingRecipeId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-
-  // MB shopping
   const [checkedIds, setCheckedIds] = useState(new Set());
   const [checkedItems, setCheckedItems] = useState(new Set());
   const [manualItems, setManualItems] = useState([]);
@@ -282,8 +246,6 @@ export default function App() {
   const [editingKey, setEditingKey] = useState(null);
   const [editingText, setEditingText] = useState("");
   const shoppingLoaded = useRef(false);
-
-  // Target
   const [targetItems, setTargetItems] = useState([]);
   const [targetChecked, setTargetChecked] = useState(new Set());
   const [targetInput, setTargetInput] = useState("");
@@ -291,8 +253,6 @@ export default function App() {
   const [targetCountdown, setTargetCountdown] = useState(null);
   const targetTimerRef = useRef(null);
   const targetResetAtRef = useRef(null);
-
-  // Lowe's
   const [lowesItems, setLowesItems] = useState([]);
   const [lowesChecked, setLowesChecked] = useState(new Set());
   const [lowesInput, setLowesInput] = useState("");
@@ -300,8 +260,6 @@ export default function App() {
   const [lowesCountdown, setLowesCountdown] = useState(null);
   const lowesTimerRef = useRef(null);
   const lowesResetAtRef = useRef(null);
-
-  // wake lock
   const [wakeLock, setWakeLock] = useState(null);
   const [wakeActive, setWakeActive] = useState(false);
 
@@ -425,7 +383,6 @@ export default function App() {
 
   // ── Helpers ──
   const saveShop = (u) => setDoc(doc(db,"app","shopping"),u,{merge:true});
-
   const allShoppingItems = useMemo(() => {
     const items=[];
     recipes.filter(r=>checkedIds.has(r.id)).forEach(r => {
@@ -463,35 +420,26 @@ export default function App() {
   const startEdit=(key,text,e)=>{e.stopPropagation();setEditingKey(key);setEditingText(text);};
   const saveEdit=(key)=>{ if(!editingText.trim()){setEditingKey(null);return;} const u=manualItems.map(m=>m.key===key?{...m,text:editingText.trim()}:m); setManualItems(u);saveShop({manualItems:u});setEditingKey(null); };
   const addManual=()=>{ if(!manualInput.trim())return; const qty=parseInt(manualQty)||1; const text=qty>1?`${qty} ${manualInput.trim()}`:manualInput.trim(); const item={key:`m${Date.now()}`,text,recipe:"Added manually",manual:true}; const u=[...manualItems,item]; setManualItems(u);saveShop({manualItems:u});setManualInput("");setManualQty(""); };
-
   const addTargetItem=()=>{ if(!targetInput.trim())return; const qty=parseInt(targetQty)||1; const text=qty>1?`${qty} ${targetInput.trim()}`:targetInput.trim(); const item={key:`t${Date.now()}`,text,category:classifyTarget(targetInput.trim())}; const u=[...targetItems,item]; setTargetItems(u); setDoc(doc(db,"app","target"),{items:u,checked:[...targetChecked]},{merge:true}); setTargetInput("");setTargetQty(""); };
   const toggleTargetItem=(key)=>{ setTargetChecked(p=>{const n=new Set(p);n.has(key)?n.delete(key):n.add(key);setDoc(doc(db,"app","target"),{checked:[...n]},{merge:true});return n;}); };
   const removeTargetItem=(key)=>{ const u=targetItems.filter(i=>i.key!==key); setTargetItems(u); setTargetChecked(p=>{const n=new Set(p);n.delete(key);return n;}); setDoc(doc(db,"app","target"),{items:u,checked:[...targetChecked].filter(k=>k!==key)},{merge:true}); };
   const resetTarget=()=>{ setTargetItems([]);setTargetChecked(new Set());setTargetCountdown(null); if(targetTimerRef.current){clearInterval(targetTimerRef.current);targetTimerRef.current=null;} targetResetAtRef.current=null; setDoc(doc(db,"app","target"),{items:[],checked:[],resetAt:null}); };
-
   const addLowesItem=()=>{ if(!lowesInput.trim())return; const qty=parseInt(lowesQty)||1; const text=qty>1?`${qty} ${lowesInput.trim()}`:lowesInput.trim(); const item={key:`l${Date.now()}`,text,category:classifyLowes(lowesInput.trim())}; const u=[...lowesItems,item]; setLowesItems(u); setDoc(doc(db,"app","lowes"),{items:u,checked:[...lowesChecked]},{merge:true}); setLowesInput("");setLowesQty(""); };
   const toggleLowesItem=(key)=>{ setLowesChecked(p=>{const n=new Set(p);n.has(key)?n.delete(key):n.add(key);setDoc(doc(db,"app","lowes"),{checked:[...n]},{merge:true});return n;}); };
   const removeLowesItem=(key)=>{ const u=lowesItems.filter(i=>i.key!==key); setLowesItems(u); setLowesChecked(p=>{const n=new Set(p);n.delete(key);return n;}); setDoc(doc(db,"app","lowes"),{items:u,checked:[...lowesChecked].filter(k=>k!==key)},{merge:true}); };
   const resetLowes=()=>{ setLowesItems([]);setLowesChecked(new Set());setLowesCountdown(null); if(lowesTimerRef.current){clearInterval(lowesTimerRef.current);lowesTimerRef.current=null;} lowesResetAtRef.current=null; setDoc(doc(db,"app","lowes"),{items:[],checked:[],resetAt:null}); };
-
   const toggleFav=async(id,e)=>{ e&&e.stopPropagation(); const r=recipes.find(r=>r.id===id); if(!r)return; await updateDoc(doc(db,"recipes",id),{favorite:!r.favorite}); };
   const setServings=(id,val)=>{ const v=Math.max(1,val); setRecipes(rs=>rs.map(r=>r.id===id?{...r,servings:v}:r)); updateDoc(doc(db,"recipes",id),{servings:v}); };
   const toggleWakeLock=async()=>{ if(wakeActive&&wakeLock){await wakeLock.release();setWakeLock(null);setWakeActive(false);} else{try{if("wakeLock" in navigator){const lock=await navigator.wakeLock.request("screen");setWakeLock(lock);setWakeActive(true);lock.addEventListener("release",()=>{setWakeActive(false);setWakeLock(null);});}}catch(e){}} };
-
   const saveRecipesToFirestore=async(nr)=>{ const batch=writeBatch(db); nr.forEach((r,i)=>{const id=`recipe_${Date.now()}_${i}`;batch.set(doc(db,"recipes",id),{title:r.title,category:r.category,baseServings:r.baseServings,servings:r.servings,ingredients:r.ingredients,instructions:r.instructions,favorite:false,notes:"",storage:""});}); await batch.commit(); };
   const RECIPE_PROMPT=`Extract this recipe and format it exactly like this:\n\nRecipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient 1\n- ingredient 2\nInstructions:\n1. Step one\n2. Step two\n\nUse one of these categories: Appetizers, Italian, Soups & Stews, Mains, Meats, Fish & Seafood, Vegetables, Sides, Desserts, Breads & Breakfast, Drinks, Other.\nReturn ONLY the formatted recipe, nothing else.`;
-
   const handleImport=async()=>{ if(!importText.trim())return; const nr=parseRecipes(importText); if(nr.length){await saveRecipesToFirestore(nr);setImportText("");setShowImport(false);} };
-
   const handlePhotoImport=async(e)=>{ const file=e.target.files?.[0]; if(!file)return; setPhotoImporting(true);setPhotoError(null);setShowPhotoImport(true); try{ const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=()=>rej(new Error("Failed to read file"));r.readAsDataURL(file);}); const mediaType=file.type||"image/jpeg"; const response=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-opus-4-5",max_tokens:2000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mediaType,data:base64}},{type:"text",text:RECIPE_PROMPT}]}]})}); if(!response.ok)throw new Error(`API error: ${response.status}`); const data=await response.json(); const recipeText=data.content?.[0]?.text; if(!recipeText)throw new Error("No recipe text returned"); const nr=parseRecipes(recipeText); if(!nr.length)throw new Error("Could not parse recipe from image"); await saveRecipesToFirestore(nr); setShowPhotoImport(false);setPhotoImporting(false); if(photoInputRef.current)photoInputRef.current.value=""; }catch(err){setPhotoError(err.message||"Something went wrong.");setPhotoImporting(false);} };
-
   const handleUrlImport=async()=>{ if(!urlImportValue.trim())return; setUrlImporting(true);setUrlImportError(null); try{ const response=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-opus-4-5",max_tokens:2000,tools:[{type:"web_search_20250305",name:"web_search"}],messages:[{role:"user",content:`Fetch the recipe from this URL and extract it: ${urlImportValue.trim()}\n\n${RECIPE_PROMPT}`}]})}); if(!response.ok)throw new Error(`API error: ${response.status}`); const data=await response.json(); const textBlock=data.content?.find(b=>b.type==="text"); const recipeText=textBlock?.text; if(!recipeText)throw new Error("No recipe text returned"); const nr=parseRecipes(recipeText); if(!nr.length)throw new Error("Could not parse a recipe from that URL. Try the text import instead."); await saveRecipesToFirestore(nr); setShowUrlImport(false);setUrlImportValue("");setUrlImporting(false); }catch(err){setUrlImportError(err.message||"Something went wrong.");setUrlImporting(false);} };
-
   const startEditRecipe=(r)=>{ setEditDraft({title:r.title,category:r.category,servings:r.servings,baseServings:r.baseServings,ingredients:r.ingredients.join("\n"),instructions:r.instructions.join("\n"),notes:r.notes||"",storage:r.storage||""}); setEditingRecipeId(r.id); };
   const saveEditRecipe=async(id)=>{ await updateDoc(doc(db,"recipes",id),{title:editDraft.title.trim(),category:editDraft.category,servings:Math.max(1,parseInt(editDraft.servings)||1),baseServings:Math.max(1,parseInt(editDraft.baseServings)||parseInt(editDraft.servings)||1),ingredients:editDraft.ingredients.split("\n").map(l=>l.replace(/^[-*•]\s*/,"").trim()).filter(Boolean),instructions:editDraft.instructions.split("\n").map(l=>l.replace(/^\d+[.)]\s*/,"").trim()).filter(Boolean),notes:editDraft.notes||"",storage:editDraft.storage||""}); setEditingRecipeId(null);setEditDraft(null); };
   const cancelEditRecipe=()=>{setEditingRecipeId(null);setEditDraft(null);};
   const deleteRecipe=async(id)=>{await deleteDoc(doc(db,"recipes",id));setSelectedId(null);setConfirmDelete(false);};
-
   const filtered=useMemo(()=>{ let list=recipes; if(activeTab==="Favorites")list=list.filter(r=>r.favorite); else if(activeTab!=="All")list=list.filter(r=>r.category===activeTab); if(search.trim()){const q=search.toLowerCase();list=list.filter(r=>r.title.toLowerCase().includes(q)||r.ingredients.some(i=>i.toLowerCase().includes(q)));} return [...list].sort((a,b)=>sortAZ?a.title.localeCompare(b.title):b.title.localeCompare(a.title)); },[recipes,activeTab,search,sortAZ]);
 
   const selected=recipes.find(r=>r.id===selectedId);
@@ -583,7 +531,7 @@ export default function App() {
     const setQtyVal=storeTab==="mb"?setManualQty:storeTab==="target"?setTargetQty:setLowesQty;
     const resetFn=storeTab==="mb"?resetShopping:storeTab==="target"?resetTarget:resetLowes;
     const countdown=storeTab==="target"?targetCountdown:storeTab==="lowes"?lowesCountdown:null;
-    const sectionLabel = {fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6};
+    const sectionLabel={fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.onSurfaceVariant,padding:"4px 0 6px",borderBottom:"0.5px solid "+M3.outlineVariant,marginBottom:6};
     return (
       <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
         <div style={{background:M3.primary,padding:"14px 16px 14px"}}>
@@ -608,10 +556,8 @@ export default function App() {
         </div>
         <div style={{padding:"12px 14px 6px"}}>
           <div style={{display:"flex",gap:8}}>
-            <input type="number" min={1} max={99} value={qtyVal} onChange={e=>setQtyVal(e.target.value)} placeholder="1"
-              style={{width:52,padding:"9px 6px",borderRadius:8,border:"1px solid "+M3.outlineVariant,fontSize:14,fontFamily:font,background:M3.surface,textAlign:"center",color:M3.onSurface}}/>
-            <input value={inputVal} onChange={e=>setInputVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addFn()} placeholder="Add item…"
-              style={{flex:1,padding:"9px 14px",borderRadius:8,border:"1px solid "+M3.outlineVariant,fontSize:14,fontFamily:font,background:M3.surface,color:M3.onSurface,outline:"none"}}/>
+            <input type="number" min={1} max={99} value={qtyVal} onChange={e=>setQtyVal(e.target.value)} placeholder="1" style={{width:52,padding:"9px 6px",borderRadius:8,border:"1px solid "+M3.outlineVariant,fontSize:14,fontFamily:font,background:M3.surface,textAlign:"center",color:M3.onSurface}}/>
+            <input value={inputVal} onChange={e=>setInputVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addFn()} placeholder="Add item…" style={{flex:1,padding:"9px 14px",borderRadius:8,border:"1px solid "+M3.outlineVariant,fontSize:14,fontFamily:font,background:M3.surface,color:M3.onSurface,outline:"none"}}/>
             <button onClick={addFn} style={{background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,cursor:"pointer",fontWeight:500,fontFamily:font}}>Add</button>
           </div>
           {storeTab==="mb"&&checkedIds.size>0&&<div style={{fontSize:12,color:M3.onSurfaceVariant,marginTop:6,fontStyle:"italic"}}>Recipes: {recipes.filter(r=>checkedIds.has(r.id)).map(r=>r.title).join(", ")}</div>}
@@ -708,7 +654,6 @@ export default function App() {
     );
   }
 
-
   // ════════════════════════════════════════════════════════════════════════════
   // IMPORT SCREEN
   if (view==="import") return (
@@ -721,12 +666,9 @@ export default function App() {
         <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:3}}>Add recipes</div>
         <div style={{fontSize:18,fontWeight:500,color:M3.onPrimary}}>Import</div>
       </div>
-
       <div style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
-        {/* Paste text */}
         <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
-          <button onClick={()=>setShowImport(v=>!v)}
-            style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
+          <button onClick={()=>setShowImport(v=>!v)} style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
             <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>📝</div>
             <div style={{flex:1}}>
               <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>Paste text</div>
@@ -736,9 +678,7 @@ export default function App() {
           </button>
           {showImport&&(
             <div style={{padding:"0 16px 16px"}}>
-              <textarea value={importText} onChange={e=>setImportText(e.target.value)}
-                style={{width:"100%",height:160,border:"1px solid "+M3.outlineVariant,borderRadius:8,padding:10,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,resize:"vertical",boxSizing:"border-box",outline:"none",lineHeight:1.6}}
-                placeholder={"Recipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient\nInstructions:\n1. Step one"}/>
+              <textarea value={importText} onChange={e=>setImportText(e.target.value)} style={{width:"100%",height:160,border:"1px solid "+M3.outlineVariant,borderRadius:8,padding:10,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,resize:"vertical",boxSizing:"border-box",outline:"none",lineHeight:1.6}} placeholder={"Recipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient\nInstructions:\n1. Step one"}/>
               <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
                 <button onClick={()=>{setShowImport(false);setImportText("");}} style={{padding:"8px 16px",background:"transparent",color:M3.onSurface,border:"1px solid "+M3.outline,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Clear</button>
                 <button onClick={async()=>{await handleImport();setView("recipes");}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font,fontWeight:500}}>Save recipe</button>
@@ -746,14 +686,11 @@ export default function App() {
             </div>
           )}
         </div>
-
-        {/* Photo — mobile only */}
         {isMobile && (
           <>
             <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} style={{display:"none"}}/>
             <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
-              <button onClick={()=>photoInputRef.current?.click()}
-                style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
+              <button onClick={()=>photoInputRef.current?.click()} style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
                 <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>📷</div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>Photo</div>
@@ -763,27 +700,15 @@ export default function App() {
               </button>
               {showPhotoImport&&(
                 <div style={{padding:"0 16px 16px",textAlign:"center"}}>
-                  {photoImporting?(
-                    <>
-                      <div style={{fontSize:13,color:M3.onSurfaceVariant,fontWeight:500}}>Reading recipe from photo…</div>
-                      <div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–10 seconds</div>
-                    </>
-                  ):photoError?(
-                    <>
-                      <p style={{fontSize:13,color:M3.error,marginBottom:10}}>{photoError}</p>
-                      <button onClick={()=>{setShowPhotoImport(false);setPhotoError(null);}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>OK</button>
-                    </>
-                  ):null}
+                  {photoImporting?(<><div style={{fontSize:13,color:M3.onSurfaceVariant,fontWeight:500}}>Reading recipe from photo…</div><div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–10 seconds</div></>)
+                  :photoError?(<><p style={{fontSize:13,color:M3.error,marginBottom:10}}>{photoError}</p><button onClick={()=>{setShowPhotoImport(false);setPhotoError(null);}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>OK</button></>):null}
                 </div>
               )}
             </div>
           </>
         )}
-
-        {/* URL */}
         <div style={{background:M3.surface,border:"0.5px solid "+M3.outlineVariant,borderRadius:16,overflow:"hidden"}}>
-          <button onClick={()=>setShowUrlImport(v=>!v)}
-            style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
+          <button onClick={()=>setShowUrlImport(v=>!v)} style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"16px 18px",display:"flex",alignItems:"center",gap:14,fontFamily:font,textAlign:"left"}}>
             <div style={{width:48,height:48,borderRadius:12,background:M3.secondaryContainer,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>🔗</div>
             <div style={{flex:1}}>
               <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>URL / link</div>
@@ -793,17 +718,10 @@ export default function App() {
           </button>
           {showUrlImport&&(
             <div style={{padding:"0 16px 16px"}}>
-              {urlImporting?(
-                <div style={{textAlign:"center",padding:"8px 0"}}>
-                  <div style={{fontSize:13,color:M3.onSurfaceVariant,fontWeight:500}}>Fetching recipe…</div>
-                  <div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–15 seconds</div>
-                </div>
-              ):(
+              {urlImporting?(<div style={{textAlign:"center",padding:"8px 0"}}><div style={{fontSize:13,color:M3.onSurfaceVariant,fontWeight:500}}>Fetching recipe…</div><div style={{fontSize:12,color:M3.secondary,marginTop:4}}>This usually takes 5–15 seconds</div></div>):(
                 <>
                   {urlImportError&&<p style={{fontSize:12,color:M3.error,marginBottom:8}}>⚠ {urlImportError}</p>}
-                  <input value={urlImportValue} onChange={e=>setUrlImportValue(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleUrlImport()}
-                    placeholder="https://example.com/recipes/…"
-                    style={{width:"100%",padding:"10px 12px",border:"1px solid "+M3.outlineVariant,borderRadius:8,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,boxSizing:"border-box",outline:"none"}}/>
+                  <input value={urlImportValue} onChange={e=>setUrlImportValue(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleUrlImport()} placeholder="https://example.com/recipes/…" style={{width:"100%",padding:"10px 12px",border:"1px solid "+M3.outlineVariant,borderRadius:8,fontSize:13,fontFamily:font,background:M3.surfaceVariant,color:M3.onSurface,boxSizing:"border-box",outline:"none"}}/>
                   <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
                     <button onClick={()=>{setShowUrlImport(false);setUrlImportValue("");setUrlImportError(null);}} style={{padding:"8px 16px",background:"transparent",color:M3.onSurface,border:"1px solid "+M3.outline,borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font}}>Cancel</button>
                     <button onClick={async()=>{await handleUrlImport();}} style={{padding:"8px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:13,fontFamily:font,fontWeight:500}}>Import</button>
@@ -814,7 +732,6 @@ export default function App() {
           )}
         </div>
       </div>
-
       <BottomNav view={view} setView={setView} totalItems={totalItems}/>
     </div>
   );
@@ -828,33 +745,17 @@ export default function App() {
       <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
         <div style={{background:M3.primary,padding:"14px 16px 18px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <button onClick={()=>{setSelectedId(null);cancelEditRecipe();setConfirmDelete(false);if(wakeLock)wakeLock.release();setWakeActive(false);setWakeLock(null);}}
-              style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:6}}>
+            <button onClick={()=>{setSelectedId(null);cancelEditRecipe();setConfirmDelete(false);if(wakeLock)wakeLock.release();setWakeActive(false);setWakeLock(null);}} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:6}}>
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 4L6 9l5 5" stroke={M3.primaryContainer} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               <span style={{fontSize:13,color:M3.primaryContainer}}>← Back</span>
             </button>
             {!isEditing&&(
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                {confirmDelete?(
-                  <>
-                    <span style={{fontSize:12,color:M3.errorContainer}}>Delete?</span>
-                    <button onClick={()=>deleteRecipe(selected.id)} style={{padding:"5px 12px",background:M3.error,border:"none",borderRadius:20,color:M3.onError,fontSize:12,cursor:"pointer",fontFamily:font}}>Delete</button>
-                    <button onClick={()=>setConfirmDelete(false)} style={{padding:"5px 12px",background:"transparent",border:"1px solid "+M3.primaryContainer,borderRadius:20,color:M3.primaryContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Cancel</button>
-                  </>
-                ):(
-                  <>
-                    <button onClick={()=>setConfirmDelete(true)} style={{padding:"5px 12px",background:"transparent",border:"1px solid "+M3.errorContainer,borderRadius:20,color:M3.errorContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Delete</button>
-                    <button onClick={()=>startEditRecipe(selected)} style={{padding:"5px 14px",background:M3.primaryContainer,border:"none",borderRadius:20,color:M3.onPrimaryContainer,fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500}}>Edit</button>
-                  </>
-                )}
+                {confirmDelete?(<><span style={{fontSize:12,color:M3.errorContainer}}>Delete?</span><button onClick={()=>deleteRecipe(selected.id)} style={{padding:"5px 12px",background:M3.error,border:"none",borderRadius:20,color:M3.onError,fontSize:12,cursor:"pointer",fontFamily:font}}>Delete</button><button onClick={()=>setConfirmDelete(false)} style={{padding:"5px 12px",background:"transparent",border:"1px solid "+M3.primaryContainer,borderRadius:20,color:M3.primaryContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Cancel</button></>)
+                :(<><button onClick={()=>setConfirmDelete(true)} style={{padding:"5px 12px",background:"transparent",border:"1px solid "+M3.errorContainer,borderRadius:20,color:M3.errorContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Delete</button><button onClick={()=>startEditRecipe(selected)} style={{padding:"5px 14px",background:M3.primaryContainer,border:"none",borderRadius:20,color:M3.onPrimaryContainer,fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500}}>Edit</button></>)}
               </div>
             )}
-            {isEditing&&(
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={cancelEditRecipe} style={{padding:"5px 12px",background:"transparent",border:"1px solid "+M3.primaryContainer,borderRadius:20,color:M3.primaryContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Cancel</button>
-                <button onClick={()=>saveEditRecipe(selected.id)} style={{padding:"5px 14px",background:M3.primaryContainer,border:"none",borderRadius:20,color:M3.onPrimaryContainer,fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500}}>Save</button>
-              </div>
-            )}
+            {isEditing&&(<div style={{display:"flex",gap:8}}><button onClick={cancelEditRecipe} style={{padding:"5px 12px",background:"transparent",border:"1px solid "+M3.primaryContainer,borderRadius:20,color:M3.primaryContainer,fontSize:12,cursor:"pointer",fontFamily:font}}>Cancel</button><button onClick={()=>saveEditRecipe(selected.id)} style={{padding:"5px 14px",background:M3.primaryContainer,border:"none",borderRadius:20,color:M3.onPrimaryContainer,fontSize:12,cursor:"pointer",fontFamily:font,fontWeight:500}}>Save</button></div>)}
           </div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div>
@@ -862,29 +763,16 @@ export default function App() {
               <div style={{fontSize:13,color:M3.onPrimary+"AA"}}>{selected.category}</div>
             </div>
             <div style={{display:"flex",gap:8,alignItems:"center",marginTop:2}}>
-              <button onClick={toggleWakeLock} style={{background:wakeActive?M3.primaryContainer:"transparent",border:"1px solid "+M3.primaryContainer,borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:500,color:wakeActive?M3.onPrimaryContainer:M3.primaryContainer,cursor:"pointer",fontFamily:font}}>
-                {wakeActive?"☀ On":"☀ Off"}
-              </button>
-              <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:M3.primaryContainer}} onClick={()=>toggleFav(selected.id)}>
-                {selected.favorite?"★":"☆"}
-              </button>
+              <button onClick={toggleWakeLock} style={{background:wakeActive?M3.primaryContainer:"transparent",border:"1px solid "+M3.primaryContainer,borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:500,color:wakeActive?M3.onPrimaryContainer:M3.primaryContainer,cursor:"pointer",fontFamily:font}}>{wakeActive?"☀ On":"☀ Off"}</button>
+              <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:M3.primaryContainer}} onClick={()=>toggleFav(selected.id)}>{selected.favorite?"★":"☆"}</button>
             </div>
           </div>
         </div>
-
         <div style={{padding:16}}>
           {isEditing?(
             <>
-              <div style={{marginBottom:14}}>
-                <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Title</label>
-                <input value={editDraft.title} onChange={e=>setEditDraft(d=>({...d,title:e.target.value}))} style={inp}/>
-              </div>
-              <div style={{marginBottom:14}}>
-                <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Category</label>
-                <select value={editDraft.category} onChange={e=>setEditDraft(d=>({...d,category:e.target.value}))} style={inp}>
-                  {CATEGORIES.filter(c=>c!=="All"&&c!=="Favorites").map(c=><option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+              <div style={{marginBottom:14}}><label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Title</label><input value={editDraft.title} onChange={e=>setEditDraft(d=>({...d,title:e.target.value}))} style={inp}/></div>
+              <div style={{marginBottom:14}}><label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Category</label><select value={editDraft.category} onChange={e=>setEditDraft(d=>({...d,category:e.target.value}))} style={inp}>{CATEGORIES.filter(c=>c!=="All"&&c!=="Favorites").map(c=><option key={c} value={c}>{c}</option>)}</select></div>
               <div style={{marginBottom:14}}>
                 <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Servings</label>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -894,70 +782,23 @@ export default function App() {
                   <span style={{fontSize:12,color:M3.onSurfaceVariant}}>Base: {editDraft.baseServings}</span>
                 </div>
               </div>
-              <div style={{marginBottom:14}}>
-                <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Ingredients <span style={{fontSize:10,color:M3.onSurfaceVariant,textTransform:"none",letterSpacing:0}}>(one per line)</span></label>
-                <textarea value={editDraft.ingredients} onChange={e=>setEditDraft(d=>({...d,ingredients:e.target.value}))} style={{...inp,height:180,resize:"vertical",lineHeight:1.6}}/>
-              </div>
-              <div style={{marginBottom:14}}>
-                <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Instructions <span style={{fontSize:10,color:M3.onSurfaceVariant,textTransform:"none",letterSpacing:0}}>(one per line)</span></label>
-                <textarea value={editDraft.instructions} onChange={e=>setEditDraft(d=>({...d,instructions:e.target.value}))} style={{...inp,height:220,resize:"vertical",lineHeight:1.6}}/>
-              </div>
-              <div style={{marginBottom:14}}>
-                <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Notes</label>
-                <textarea value={editDraft.notes} onChange={e=>setEditDraft(d=>({...d,notes:e.target.value}))} style={{...inp,height:100,resize:"vertical",lineHeight:1.6}} placeholder="Personal tweaks, substitutions…"/>
-              </div>
-              <div style={{marginBottom:14}}>
-                <label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Storage</label>
-                <textarea value={editDraft.storage} onChange={e=>setEditDraft(d=>({...d,storage:e.target.value}))} style={{...inp,height:80,resize:"vertical",lineHeight:1.6}} placeholder="e.g. Refrigerate up to 3 days"/>
-              </div>
+              <div style={{marginBottom:14}}><label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Ingredients <span style={{fontSize:10,color:M3.onSurfaceVariant,textTransform:"none",letterSpacing:0}}>(one per line)</span></label><textarea value={editDraft.ingredients} onChange={e=>setEditDraft(d=>({...d,ingredients:e.target.value}))} style={{...inp,height:180,resize:"vertical",lineHeight:1.6}}/></div>
+              <div style={{marginBottom:14}}><label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Instructions <span style={{fontSize:10,color:M3.onSurfaceVariant,textTransform:"none",letterSpacing:0}}>(one per line)</span></label><textarea value={editDraft.instructions} onChange={e=>setEditDraft(d=>({...d,instructions:e.target.value}))} style={{...inp,height:220,resize:"vertical",lineHeight:1.6}}/></div>
+              <div style={{marginBottom:14}}><label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Notes</label><textarea value={editDraft.notes} onChange={e=>setEditDraft(d=>({...d,notes:e.target.value}))} style={{...inp,height:100,resize:"vertical",lineHeight:1.6}} placeholder="Personal tweaks, substitutions…"/></div>
+              <div style={{marginBottom:14}}><label style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.2,color:M3.secondary,display:"block",marginBottom:6}}>Storage</label><textarea value={editDraft.storage} onChange={e=>setEditDraft(d=>({...d,storage:e.target.value}))} style={{...inp,height:80,resize:"vertical",lineHeight:1.6}} placeholder="e.g. Refrigerate up to 3 days"/></div>
             </>
           ):(
             <>
-              {/* Servings */}
               <div style={{background:M3.secondaryContainer,borderRadius:16,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:14}}>
-                <div onClick={()=>setServings(selected.id,selected.servings-1)} style={{width:32,height:32,borderRadius:"50%",border:"1.5px solid "+M3.secondary,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8" stroke={M3.secondary} strokeWidth="1.5" strokeLinecap="round"/></svg>
-                </div>
-                <div style={{textAlign:"center",minWidth:40}}>
-                  <div style={{fontSize:22,fontWeight:500,color:M3.onSecondaryContainer,lineHeight:1}}>{selected.servings}</div>
-                  <div style={{fontSize:11,color:M3.secondary,marginTop:2}}>servings</div>
-                </div>
-                <div onClick={()=>setServings(selected.id,selected.servings+1)} style={{width:32,height:32,borderRadius:"50%",background:M3.secondary,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke={M3.onSecondary} strokeWidth="1.5" strokeLinecap="round"/></svg>
-                </div>
+                <div onClick={()=>setServings(selected.id,selected.servings-1)} style={{width:32,height:32,borderRadius:"50%",border:"1.5px solid "+M3.secondary,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8" stroke={M3.secondary} strokeWidth="1.5" strokeLinecap="round"/></svg></div>
+                <div style={{textAlign:"center",minWidth:40}}><div style={{fontSize:22,fontWeight:500,color:M3.onSecondaryContainer,lineHeight:1}}>{selected.servings}</div><div style={{fontSize:11,color:M3.secondary,marginTop:2}}>servings</div></div>
+                <div onClick={()=>setServings(selected.id,selected.servings+1)} style={{width:32,height:32,borderRadius:"50%",background:M3.secondary,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke={M3.onSecondary} strokeWidth="1.5" strokeLinecap="round"/></svg></div>
                 <input type="range" min={1} max={24} step={1} value={Math.min(selected.servings,24)} onChange={e=>setServings(selected.id,parseInt(e.target.value))} style={{flex:1}}/>
               </div>
-
-              {selected.ingredients.length>0&&<>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Ingredients</div>
-                {selected.ingredients.map((ing,i)=><div key={i} style={{fontSize:14,padding:"6px 0",borderBottom:"0.5px solid "+M3.outlineVariant,color:M3.onSurface}}>{ratio!==1?scaleIngredient(ing,ratio):ing}</div>)}
-              </>}
-
-              {selected.instructions.length>0&&<>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Instructions</div>
-                {selected.instructions.map((step,i)=>{
-                  const secs=extractTimerSeconds(step);
-                  return (
-                    <div key={i} style={{fontSize:14,padding:"8px 0",lineHeight:1.6,display:"flex",gap:12,borderBottom:"0.5px solid "+M3.outlineVariant}}>
-                      <div style={{minWidth:24,height:24,borderRadius:"50%",background:M3.primary,color:M3.onPrimary,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:500,marginTop:2,flexShrink:0}}>{i+1}</div>
-                      <div style={{flex:1}}>
-                        <div style={{color:M3.onSurface}}>{step}</div>
-                        {secs&&<StepTimer key={`${selected.id}-${i}`} seconds={secs} stepText={step}/>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </>}
-
-              {selected.storage&&<>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Storage</div>
-                <div style={{fontSize:14,lineHeight:1.7,color:M3.onSurface,background:M3.surfaceVariant,borderRadius:12,padding:"12px 14px"}}>{selected.storage}</div>
-              </>}
-
-              {selected.notes&&<>
-                <div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Notes</div>
-                <div style={{fontSize:14,lineHeight:1.7,color:M3.onSurface,background:M3.surfaceVariant,borderRadius:12,padding:"12px 14px"}}>{selected.notes}</div>
-              </>}
+              {selected.ingredients.length>0&&<><div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Ingredients</div>{selected.ingredients.map((ing,i)=><div key={i} style={{fontSize:14,padding:"6px 0",borderBottom:"0.5px solid "+M3.outlineVariant,color:M3.onSurface}}>{ratio!==1?scaleIngredient(ing,ratio):ing}</div>)}</>}
+              {selected.instructions.length>0&&<><div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Instructions</div>{selected.instructions.map((step,i)=>{const secs=extractTimerSeconds(step);return(<div key={i} style={{fontSize:14,padding:"8px 0",lineHeight:1.6,display:"flex",gap:12,borderBottom:"0.5px solid "+M3.outlineVariant}}><div style={{minWidth:24,height:24,borderRadius:"50%",background:M3.primary,color:M3.onPrimary,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:500,marginTop:2,flexShrink:0}}>{i+1}</div><div style={{flex:1}}><div style={{color:M3.onSurface}}>{step}</div>{secs&&<StepTimer key={`${selected.id}-${i}`} seconds={secs} stepText={step}/>}</div></div>);})}</>}
+              {selected.storage&&<><div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Storage</div><div style={{fontSize:14,lineHeight:1.7,color:M3.onSurface,background:M3.surfaceVariant,borderRadius:12,padding:"12px 14px"}}>{selected.storage}</div></>}
+              {selected.notes&&<><div style={{fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:1.5,color:M3.primary,borderBottom:"1.5px solid "+M3.outlineVariant,paddingBottom:6,marginBottom:10,marginTop:20}}>Notes</div><div style={{fontSize:14,lineHeight:1.7,color:M3.onSurface,background:M3.surfaceVariant,borderRadius:12,padding:"12px 14px"}}>{selected.notes}</div></>}
             </>
           )}
         </div>
@@ -969,50 +810,26 @@ export default function App() {
   // RECIPE LIST
   return (
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
-      {/* Sticky header */}
       <div style={{background:M3.primary,padding:"14px 16px 0",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
           <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2}}>{APP_NAME}</div>
           <BackBtn to="storeSelect" label="Home" setView={setView}/>
         </div>
         <div style={{fontSize:11,color:M3.onPrimary+"99",letterSpacing:1.2,marginBottom:8}}>Recipes</div>
-
-        {/* Category chips */}
         <div style={{display:"flex",overflowX:"auto",scrollbarWidth:"none",gap:6,paddingBottom:10}}>
-          {CATEGORIES.map(cat=>{
-            const active=activeTab===cat;
-            return (
-              <button key={cat} onClick={()=>setActiveTab(cat)}
-                style={{padding:"6px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",borderRadius:20,fontFamily:font,fontWeight:active?500:400,background:active?M3.primaryContainer:"transparent",color:active?M3.onPrimaryContainer:M3.primaryContainer,flexShrink:0,border:active?"none":`1px solid ${M3.primaryContainer}`}}>
-                {cat}
-              </button>
-            );
-          })}
+          {CATEGORIES.map(cat=>{const active=activeTab===cat;return(<button key={cat} onClick={()=>setActiveTab(cat)} style={{padding:"6px 14px",fontSize:12,cursor:"pointer",whiteSpace:"nowrap",borderRadius:20,fontFamily:font,fontWeight:active?500:400,background:active?M3.primaryContainer:"transparent",color:active?M3.onPrimaryContainer:M3.primaryContainer,flexShrink:0,border:active?"none":`1px solid ${M3.primaryContainer}`}}>{cat}</button>);})}
         </div>
       </div>
-
-      {/* Search */}
       <div style={{padding:"12px 14px 6px",display:"flex",gap:8,alignItems:"center"}}>
         <div style={{flex:1,position:"relative",display:"flex",alignItems:"center"}}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{position:"absolute",left:12,flexShrink:0,pointerEvents:"none"}}>
-            <circle cx="7" cy="7" r="5" stroke={M3.onSurfaceVariant} strokeWidth="1.3"/>
-            <line x1="11" y1="11" x2="14" y2="14" stroke={M3.onSurfaceVariant} strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-          <input placeholder="Search recipes or ingredients…" value={search} onChange={e=>setSearch(e.target.value)}
-            style={{width:"100%",padding:"9px 12px 9px 34px",borderRadius:28,border:"1px solid "+M3.outlineVariant,background:M3.surfaceVariant,color:M3.onSurface,fontSize:14,outline:"none",fontFamily:font,boxSizing:"border-box"}}/>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{position:"absolute",left:12,flexShrink:0,pointerEvents:"none"}}><circle cx="7" cy="7" r="5" stroke={M3.onSurfaceVariant} strokeWidth="1.3"/><line x1="11" y1="11" x2="14" y2="14" stroke={M3.onSurfaceVariant} strokeWidth="1.3" strokeLinecap="round"/></svg>
+          <input placeholder="Search recipes or ingredients…" value={search} onChange={e=>setSearch(e.target.value)} style={{width:"100%",padding:"9px 12px 9px 34px",borderRadius:28,border:"1px solid "+M3.outlineVariant,background:M3.surfaceVariant,color:M3.onSurface,fontSize:14,outline:"none",fontFamily:font,boxSizing:"border-box"}}/>
         </div>
-        <button onClick={()=>setSortAZ(v=>!v)} style={{padding:"9px 14px",borderRadius:20,border:"1px solid "+M3.outlineVariant,background:"transparent",color:M3.onSurfaceVariant,fontSize:12,cursor:"pointer",fontFamily:font,whiteSpace:"nowrap"}}>
-          {sortAZ?"A→Z":"Z→A"}
-        </button>
+        <button onClick={()=>setSortAZ(v=>!v)} style={{padding:"9px 14px",borderRadius:20,border:"1px solid "+M3.outlineVariant,background:"transparent",color:M3.onSurfaceVariant,fontSize:12,cursor:"pointer",fontFamily:font,whiteSpace:"nowrap"}}>{sortAZ?"A→Z":"Z→A"}</button>
       </div>
-
-      {/* Recipe list */}
       <div style={{padding:"8px 14px 0",paddingBottom:90}}>
-        {filtered.length===0?(
-          <p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>
-            {search?"No recipes match your search.":activeTab==="Favorites"?"No favorites yet.":"No recipes in this category yet."}
-          </p>
-        ):filtered.map(r=>(
+        {filtered.length===0?(<p style={{textAlign:"center",padding:"40px 20px",color:M3.onSurfaceVariant,fontStyle:"italic"}}>{search?"No recipes match your search.":activeTab==="Favorites"?"No favorites yet.":"No recipes in this category yet."}</p>)
+        :filtered.map(r=>(
           <div key={r.id} style={{background:M3.surface,border:"0.5px solid "+(checkedIds.has(r.id)?M3.primary:M3.outlineVariant),borderRadius:12,padding:"11px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}}>
             <div onClick={e=>toggleCheck(r.id,e)} style={{width:22,height:22,borderRadius:6,border:"2px solid "+(checkedIds.has(r.id)?M3.primary:M3.outline),background:checkedIds.has(r.id)?M3.primary:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
               {checkedIds.has(r.id)&&<svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke={M3.onPrimary} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -1021,14 +838,10 @@ export default function App() {
               <p style={{fontSize:15,fontWeight:500,margin:0,color:M3.onSurface,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</p>
               <p style={{fontSize:12,color:M3.onSurfaceVariant,marginTop:2}}>{r.category} · {r.servings} servings</p>
             </div>
-            <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:r.favorite?M3.primary:M3.outlineVariant,flexShrink:0}} onClick={e=>toggleFav(r.id,e)}>
-              {r.favorite?"★":"☆"}
-            </button>
+            <button style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:r.favorite?M3.primary:M3.outlineVariant,flexShrink:0}} onClick={e=>toggleFav(r.id,e)}>{r.favorite?"★":"☆"}</button>
           </div>
         ))}
       </div>
-
-      {/* M3 Bottom Navigation Bar */}
       <BottomNav view={view} setView={setView} totalItems={totalItems}/>
     </div>
   );
