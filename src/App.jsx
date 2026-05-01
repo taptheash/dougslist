@@ -206,7 +206,7 @@ function BottomNav({ view, setView, totalItems }) {
 // ════════════════════════════════════════════════════════════════════════════
 export default function App() {
   // ── Auth ──
-  const [user, setUser] = useState(undefined); // undefined=loading, null=logged out
+  const [user, setUser] = useState(undefined);
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUser(u));
     getRedirectResult(auth).catch(() => {});
@@ -423,6 +423,12 @@ export default function App() {
   const activeSections=STORE_SECTIONS.filter(s=>grouped[s.key]?.some(i=>!checkedItems.has(i.key)));
   const completedItems=allShoppingItems.filter(i=>checkedItems.has(i.key));
 
+  // ── Counts: unchecked items only ──────────────────────────────────────────
+  const mbCount = allShoppingItems.filter(i=>!checkedItems.has(i.key)).length;
+  const targetCount = targetItems.filter(i=>!targetChecked.has(i.key)).length;
+  const lowesCount = lowesItems.filter(i=>!lowesChecked.has(i.key)).length;
+  const totalItems = mbCount + targetCount + lowesCount;
+
   const resetShopping=()=>{ const e={checkedIds:[],checkedItems:[],manualItems:[],removedKeys:[],resetAt:null}; setCheckedIds(new Set());setCheckedItems(new Set());setManualItems([]);setRemovedKeys(new Set());setEditingKey(null);saveShop(e); };
   const toggleCheck=(id,e)=>{ e.stopPropagation(); setCheckedIds(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);saveShop({checkedIds:[...n]});return n;}); };
   const toggleItem=(key)=>{ setCheckedItems(p=>{const n=new Set(p);n.has(key)?n.delete(key):n.add(key);saveShop({checkedItems:[...n]});return n;}); };
@@ -453,10 +459,8 @@ export default function App() {
   const filtered=useMemo(()=>{ let list=recipes; if(activeTab==="Favorites")list=list.filter(r=>r.favorite); else if(activeTab!=="All")list=list.filter(r=>r.category===activeTab); if(search.trim()){const q=search.toLowerCase();list=list.filter(r=>r.title.toLowerCase().includes(q)||r.ingredients.some(i=>i.toLowerCase().includes(q)));} return [...list].sort((a,b)=>sortAZ?a.title.localeCompare(b.title):b.title.localeCompare(a.title)); },[recipes,activeTab,search,sortAZ]);
 
   const selected=recipes.find(r=>r.id===selectedId);
-  const mbCount=total, targetCount=targetItems.length, lowesCount=lowesItems.length;
-  const totalItems=mbCount+targetCount+lowesCount;
 
-  // ── Auth gate ────────────────────────────────────────────────────────────────
+  // ── Auth gate ──────────────────────────────────────────────────────────────
   if (user === undefined) return (
     <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{fontSize:16,color:M3.onSurfaceVariant}}>Loading…</div>
@@ -468,8 +472,7 @@ export default function App() {
       <div style={{width:56,height:56,borderRadius:16,background:M3.primaryContainer,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28}}>🛒</div>
       <div style={{fontSize:24,fontWeight:500,color:M3.onSurface}}>{APP_NAME}</div>
       <p style={{fontSize:14,color:M3.onSurfaceVariant,margin:0}}>Sign in to access your cookbook and lists.</p>
-      <button onClick={handleSignIn}
-        style={{padding:"12px 28px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:24,fontSize:15,fontWeight:500,cursor:"pointer",fontFamily:font,marginTop:8}}>
+      <button onClick={handleSignIn} style={{padding:"12px 28px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:24,fontSize:15,fontWeight:500,cursor:"pointer",fontFamily:font,marginTop:8}}>
         Sign in with Google
       </button>
     </div>
@@ -509,7 +512,7 @@ export default function App() {
               <div style={{width:48,height:48,borderRadius:12,background:store.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:22}}>{store.emoji}</div>
               <div style={{flex:1}}>
                 <div style={{fontSize:16,fontWeight:500,color:M3.onSurface}}>{store.label}</div>
-                <div style={{fontSize:13,color:M3.onSurfaceVariant,marginTop:2}}>{count>0?`${count} item${count!==1?"s":""}`:"No items"}</div>
+                <div style={{fontSize:13,color:M3.onSurfaceVariant,marginTop:2}}>{count>0?`${count} item${count!==1?"s":""} remaining`:"No items"}</div>
               </div>
               {count>0&&<div style={{background:store.color,color:"white",borderRadius:20,padding:"3px 10px",fontSize:12,fontWeight:700}}>{count}</div>}
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke={M3.outline} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
