@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { auth, googleProvider } from "./firebase";
-import { signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "firebase/auth";
 import { db } from "./firebase";
 import {
   collection, doc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch
@@ -212,7 +212,17 @@ export default function App() {
     getRedirectResult(auth).catch(() => {});
     return unsub;
   }, []);
-  const handleSignIn = () => signInWithRedirect(auth, googleProvider);
+  const handleSignIn = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      if (err.code === "auth/popup-blocked") {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        console.error("Sign in error:", err);
+      }
+    }
+  };
   const handleSignOut = () => signOut(auth);
 
   // ── State ──
