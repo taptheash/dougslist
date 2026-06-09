@@ -54,12 +54,12 @@ export const TARGET_CATEGORIES = [
 export const TARGET_KEYWORDS = {
   grocery: ["food","snack","chips","cereal","coffee","tea","water","juice","soda","bread","pasta","rice","sauce","soup","candy","chocolate","cookie","cracker","nut","granola","protein bar","frozen","drink","beverage"],
   health: ["shampoo","conditioner","soap","lotion","deodorant","toothpaste","toothbrush","floss","razor","makeup","skincare","sunscreen","body wash","hair"],
-  cleaning: ["cleaner","detergent","bleach","sponge","mop","broom","trash bag","paper towel","napkin","foil","plastic wrap","ziploc","dish soap","laundry"],
+  cleaning: ["cleaner","detergent","bleach","sponge","mop","broom","trash bag","garbage bag","ziploc","plastic bag","foil","aluminum foil","parchment","plastic wrap","paper towel","napkin"],
   clothing: ["shirt","pants","jeans","dress","shoes","socks","underwear","jacket","coat","hat","gloves","scarf","boots","sneakers"],
   home: ["candle","picture frame","pillow","blanket","towel","curtain","rug","lamp","storage","basket","organizer","decor","vase","mirror"],
   electronics: ["phone","charger","cable","headphones","speaker","battery","tv","remote","computer","tablet","camera","printer"],
   toys: ["toy","game","puzzle","doll","lego","book","craft","art","play","kids","baby"],
-  pharmacy: ["vitamin","supplement","medicine","ibuprofen","tylenol","advil","bandage","first aid","prescription","otc","melatonin","allergy"],
+  pharmacy: ["vitamin","supplement","medicine","ibuprofen","tylenol","advil","nyquil","bandage","first aid","prescription","otc","melatonin","allergy"],
   pet: ["dog","cat","pet","treat","litter","leash","collar"],
 };
 
