@@ -105,62 +105,60 @@ function BottomNav({view,setView,totalItems}){
   return(<div style={{position:"fixed",bottom:0,left:0,right:0,background:M3.surface,borderTop:"0.5px solid "+M3.outlineVariant,display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom, 0px)"}}><button onClick={()=>setView("storeSelect")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font,position:"relative"}}><div style={pill("storeSelect")}><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M2 2h3l2 10h10l2-7H6" stroke={ic("storeSelect")} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><circle cx="9" cy="17" r="1.5" fill={ic("storeSelect")}/><circle cx="16" cy="17" r="1.5" fill={ic("storeSelect")}/></svg>{totalItems>0&&<span style={{position:"absolute",top:-2,right:8,background:M3.error,color:M3.onError,borderRadius:"50%",fontSize:9,width:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{totalItems>99?"99+":totalItems}</span>}</div><span style={label("storeSelect")}>Shopping</span></button><button onClick={()=>setView("recipes")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font}}><div style={pill("recipes")}><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 6h14M4 11h14M4 16h9" stroke={ic("recipes")} strokeWidth="1.6" strokeLinecap="round"/></svg></div><span style={label("recipes")}>Recipes</span></button><button onClick={()=>setView("import")} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:font}}><div style={pill("import")}><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="8.5" stroke={ic("import")} strokeWidth="1.6"/><path d="M11 7v8M8 13l3 3 3-3" stroke={ic("import")} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg></div><span style={label("import")}>Import</span></button></div>);
 }
 
-// ── Section Picker Modal ──────────────────────────────────────────────────────
-function SectionPickerModal({item, onSelect, onClose}){
+// ── Aisle Editor Modal ────────────────────────────────────────────────────────
+function AisleEditorModal({item, onSelect, onClose}){
+  const [aisleInput, setAisleInput] = useState(item.aisleBadge || "");
+  const [error, setError] = useState(null);
+
+  const handleSave = () => {
+    const normalized = aisleInput.trim().toUpperCase().replace(/^A/, "");
+    if (!normalized) {
+      setError("Aisle cannot be empty");
+      return;
+    }
+    // Find the section with this aisle
+    const section = STORE_SECTIONS.find(s => s.aisle === normalized || s.aisle === "A" + normalized);
+    if (!section) {
+      setError(`No aisle "${aisleInput}" found. Try one of: 1-20, AMeat, ADeli, ASeafood, Entrance`);
+      return;
+    }
+    onSelect(section.key);
+  };
+
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"flex-end"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:M3.surface,borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"70vh",overflow:"auto",padding:"16px 0 32px"}}>
         <div style={{textAlign:"center",padding:"0 16px 12px",borderBottom:"0.5px solid "+M3.outlineVariant}}>
           <div style={{width:40,height:4,borderRadius:2,background:M3.outlineVariant,margin:"0 auto 12px"}}/>
-          <div style={{fontSize:14,fontWeight:500,color:M3.onSurface}}>Move "{item.text}" to…</div>
-          <div style={{fontSize:12,color:M3.onSurfaceVariant,marginTop:2}}>Keyword override — affects all similar items</div>
+          <div style={{fontSize:14,fontWeight:500,color:M3.onSurface}}>Change aisle for "{item.text}"</div>
+          <div style={{fontSize:12,color:M3.onSurfaceVariant,marginTop:2}}>Type the aisle number (e.g., 20, A20, AMeat)</div>
         </div>
-        {STORE_SECTIONS.map(sec=>(
-          <div key={sec.key} onClick={()=>onSelect(sec.key)}
-            style={{padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",borderBottom:"0.5px solid "+M3.outlineVariant+"44",background:item.sectionKey===sec.key?M3.primaryContainer+"44":"transparent"}}>
-            <div>
-              <div style={{fontSize:14,color:M3.onSurface,fontWeight:item.sectionKey===sec.key?500:400}}>{sec.label}</div>
-              <div style={{fontSize:11,color:M3.onSurfaceVariant}}>Aisle {sec.aisle}</div>
-            </div>
-            {item.sectionKey===sec.key&&<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><polyline points="3,8 6,11 13,4" stroke={M3.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+        <div style={{padding:"16px 20px"}}>
+          <input
+            autoFocus
+            type="text"
+            value={aisleInput}
+            onChange={e=>setAisleInput(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")handleSave();if(e.key==="Escape")onClose();}}
+            placeholder="e.g., 20 or AMeat"
+            style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1.5px solid "+(error?M3.error:M3.outlineVariant),fontSize:15,fontFamily:font,background:M3.surface,color:M3.onSurface,boxSizing:"border-box",outline:"none"}}
+          />
+          {error&&<div style={{fontSize:12,color:M3.error,marginTop:8}}>{error}</div>}
+          <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
+            <button onClick={onClose} style={{padding:"10px 18px",background:"transparent",color:M3.onSurface,border:"1px solid "+M3.outline,borderRadius:20,cursor:"pointer",fontSize:14,fontFamily:font}}>Cancel</button>
+            <button onClick={handleSave} style={{padding:"10px 20px",background:M3.primary,color:M3.onPrimary,border:"none",borderRadius:20,cursor:"pointer",fontSize:14,fontFamily:font,fontWeight:500}}>Save</button>
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Draggable MB Item ─────────────────────────────────────────────────────────
-function DraggableMBItem({item, sec, isEd, editingText, setEditingText, onToggle, onEdit, onSaveEdit, onCancelEdit, onRemove, onSectionPick, onDragStart, onDragOver, onDrop, isDraggingOver, recipes, setSelectedId, setView}){
-  const longPressTimer = useRef(null);
-  const [pressing, setPressing] = useState(false);
-
-  const handleBadgePointerDown = (e) => {
-    e.stopPropagation();
-    setPressing(true);
-    longPressTimer.current = setTimeout(() => {
-      setPressing(false);
-      onSectionPick(item);
-    }, 500);
-  };
-  const handleBadgePointerUp = (e) => {
-    e.stopPropagation();
-    clearTimeout(longPressTimer.current);
-    if (pressing) {
-      setPressing(false);
-      onSectionPick(item);
-    }
-  };
-
+// ── MB Item (no drag-and-drop) ────────────────────────────────────────────────
+function MBItem({item, sec, isEd, editingText, setEditingText, onToggle, onEdit, onSaveEdit, onCancelEdit, onRemove, onAislePick, recipes, setSelectedId, setView}){
   const rnames = item.recipeList || [item.recipe];
   return (
-    <div
-      draggable
-      onDragStart={()=>onDragStart(item.key)}
-      onDragOver={e=>{e.preventDefault();onDragOver(item.key);}}
-      onDrop={()=>onDrop(item.key)}
-      style={{background:isDraggingOver?M3.primaryContainer+"44":M3.surface,borderRadius:12,border:"0.5px solid "+(isDraggingOver?M3.primary:M3.outlineVariant),padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10,transition:"background 0.15s",cursor:"grab"}}
-    >
+    <div style={{background:M3.surface,borderRadius:12,border:"0.5px solid "+M3.outlineVariant,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10}}>
       <div onClick={()=>onToggle(item.key)} style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+M3.outline,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:2}}/>
       <div style={{flex:1,minWidth:0}}>
         {isEd
@@ -181,11 +179,9 @@ function DraggableMBItem({item, sec, isEd, editingText, setEditingText, onToggle
       <span onClick={e=>onEdit(item.key,item.text,e)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✎</span>
       <span onClick={()=>onRemove(item.key)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✕</span>
       <span
-        onPointerDown={handleBadgePointerDown}
-        onPointerUp={handleBadgePointerUp}
-        onPointerLeave={()=>{clearTimeout(longPressTimer.current);setPressing(false);}}
-        title="Tap to reassign aisle"
-        style={{fontSize:10,color:pressing?M3.primary:M3.onSurfaceVariant,background:pressing?M3.primaryContainer:M3.surfaceVariant,borderRadius:6,padding:"2px 7px",whiteSpace:"nowrap",flexShrink:0,cursor:"pointer",userSelect:"none",transition:"background 0.2s"}}
+        onClick={()=>onAislePick(item)}
+        title="Click to change aisle"
+        style={{fontSize:10,color:M3.onSurfaceVariant,background:M3.surfaceVariant,borderRadius:6,padding:"2px 7px",whiteSpace:"nowrap",flexShrink:0,cursor:"pointer",userSelect:"none"}}
       >
         A{sec.aisle}
       </span>
@@ -235,6 +231,7 @@ export default function App() {
   const [manualQty,setManualQty]=useState("");
   const [editingKey,setEditingKey]=useState(null);
   const [editingText,setEditingText]=useState("");
+  const [editingQty,setEditingQty]=useState("");
   const shoppingLoaded=useRef(false);
   const [targetItems,setTargetItems]=useState([]);
   const [targetChecked,setTargetChecked]=useState(new Set());
@@ -254,11 +251,9 @@ export default function App() {
   const [wakeActive,setWakeActive]=useState(false);
 
   // ── Classification overrides & item order ──────────────────────────────────
-  const [classOverrides, setClassOverrides] = useState({}); // keyword -> sectionKey
-  const [itemOrder, setItemOrder] = useState({}); // sectionKey -> [keys in order]
-  const [sectionPickerItem, setSectionPickerItem] = useState(null);
-  const dragKey = useRef(null);
-  const dragOverKey = useRef(null);
+  const [classOverrides, setClassOverrides] = useState({});
+  const [itemOrder, setItemOrder] = useState({});
+  const [aisleEditorItem, setAisleEditorItem] = useState(null);
 
   // ── Effects ──
   useEffect(()=>{window.scrollTo(0,0);},[view]);
@@ -295,7 +290,6 @@ export default function App() {
     return()=>unsub();
   },[]);
 
-  // Load classification overrides and item order
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"app","mbSettings"),(snap)=>{
       if(snap.exists()){
@@ -397,7 +391,6 @@ export default function App() {
   const grouped=useMemo(()=>{
     const g={};STORE_SECTIONS.forEach(s=>g[s.key]=[]);
     allShoppingItems.forEach(item=>{(g[item.sectionKey]||g["kitchen"]).push(item);});
-    // Apply saved order within each section
     const c={};
     Object.keys(g).forEach(k=>{
       let items=combineItems(g[k]);
@@ -427,67 +420,28 @@ export default function App() {
   const lowesCount=lowesItems.filter(i=>!lowesChecked.has(i.key)).length;
   const totalItems=mbCount+targetCount+lowesCount;
 
-  // ── Section reclassify ────────────────────────────────────────────────────
-  const handleSectionPick = (item) => setSectionPickerItem(item);
+  // ── Aisle editor ─────────────────────────────────────────────────────────
+  const handleAislePick = (item) => setAisleEditorItem(item);
 
-  const handleSectionSelect = (newSectionKey) => {
-    if (!sectionPickerItem) return;
-    // Extract keyword from item text (use raw ingredient text, lowercased)
-    const keyword = sectionPickerItem.text.toLowerCase().replace(/^\d+\s+/, "").trim();
+  const handleAisleSelect = (newSectionKey) => {
+    if (!aisleEditorItem) return;
+    const keyword = aisleEditorItem.text.toLowerCase().replace(/^\d+\s+/, "").trim();
     const newOverrides = {...classOverrides, [keyword]: newSectionKey};
     setClassOverrides(newOverrides);
-    // Clear stored order for both old and new sections so items re-sort cleanly
     const newOrder = {...itemOrder};
-    delete newOrder[sectionPickerItem.sectionKey];
+    delete newOrder[aisleEditorItem.sectionKey];
     delete newOrder[newSectionKey];
     setItemOrder(newOrder);
     saveMBSettings(newOverrides, newOrder);
-    setSectionPickerItem(null);
-  };
-
-  // ── Drag and drop ─────────────────────────────────────────────────────────
-  const [dragOverItemKey, setDragOverItemKey] = useState(null);
-
-  const handleDragStart = (key) => { dragKey.current = key; };
-
-  const handleDragOver = (key) => {
-    if(key !== dragKey.current) setDragOverItemKey(key);
-  };
-
-  const handleDrop = (targetKey) => {
-    const sourceKey = dragKey.current;
-    if (!sourceKey || sourceKey === targetKey) { setDragOverItemKey(null); return; }
-
-    // Find which section both items are in
-    let sectionKey = null;
-    for (const [sk, items] of Object.entries(grouped)) {
-      const keys = items.map(i=>i.key);
-      if (keys.includes(sourceKey) && keys.includes(targetKey)) { sectionKey = sk; break; }
-    }
-    if (!sectionKey) { setDragOverItemKey(null); return; }
-
-    const items = grouped[sectionKey];
-    const fromIdx = items.findIndex(i=>i.key===sourceKey);
-    const toIdx = items.findIndex(i=>i.key===targetKey);
-    if (fromIdx === -1 || toIdx === -1) { setDragOverItemKey(null); return; }
-
-    const newItems = [...items];
-    const [moved] = newItems.splice(fromIdx, 1);
-    newItems.splice(toIdx, 0, moved);
-
-    const newOrder = {...itemOrder, [sectionKey]: newItems.map(i=>i.key)};
-    setItemOrder(newOrder);
-    saveMBSettings(classOverrides, newOrder);
-    setDragOverItemKey(null);
-    dragKey.current = null;
+    setAisleEditorItem(null);
   };
 
   const resetShopping=()=>{const e={checkedIds:[],checkedItems:[],manualItems:[],removedKeys:[],resetAt:null};setCheckedIds(new Set());setCheckedItems(new Set());setManualItems([]);setRemovedKeys(new Set());setEditingKey(null);saveShop(e);};
   const toggleCheck=(id,e)=>{e.stopPropagation();setCheckedIds(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);saveShop({checkedIds:[...n]});return n;});};
   const toggleItem=(key)=>{setCheckedItems(p=>{const n=new Set(p);n.has(key)?n.delete(key):n.add(key);saveShop({checkedItems:[...n]});return n;});};
   const removeItem=(key)=>{setRemovedKeys(p=>{const n=new Set(p);n.add(key);saveShop({removedKeys:[...n]});return n;});setCheckedItems(p=>{const n=new Set(p);n.delete(key);saveShop({checkedItems:[...n]});return n;});};
-  const startEdit=(key,text,e)=>{e.stopPropagation();setEditingKey(key);setEditingText(text);};
-  const saveEdit=(key)=>{if(!editingText.trim()){setEditingKey(null);return;}const u=manualItems.map(m=>m.key===key?{...m,text:editingText.trim()}:m);setManualItems(u);saveShop({manualItems:u});setEditingKey(null);};
+  const startEdit=(key,text,e)=>{e.stopPropagation();setEditingKey(key);setEditingText(text);setEditingQty("");};
+  const saveEdit=(key)=>{if(!editingText.trim()){setEditingKey(null);return;}const u=manualItems.map(m=>m.key===key?{...m,text:editingText.trim()}:m);setManualItems(u);saveShop({manualItems:u});setEditingKey(null);setEditingQty("");};
   const addManual=()=>{if(!manualInput.trim())return;const qty=parseInt(manualQty)||1;const text=qty>1?`${qty} ${manualInput.trim()}`:manualInput.trim();const item={key:`m${Date.now()}`,text,recipe:"Added manually",manual:true};const u=[...manualItems,item];setManualItems(u);saveShop({manualItems:u});setManualInput("");setManualQty("");};
   const addTargetItem=()=>{if(!targetInput.trim())return;const qty=parseInt(targetQty)||1;const text=qty>1?`${qty} ${targetInput.trim()}`:targetInput.trim();const item={key:`t${Date.now()}`,text,category:classifyTarget(targetInput.trim())};const u=[...targetItems,item];setTargetItems(u);setDoc(doc(db,"app","target"),{items:u,checked:[...targetChecked]},{merge:true});setTargetInput("");setTargetQty("");};
   const toggleTargetItem=(key)=>{setTargetChecked(p=>{const n=new Set(p);n.has(key)?n.delete(key):n.add(key);setDoc(doc(db,"app","target"),{checked:[...n]},{merge:true});return n;});};
@@ -588,7 +542,7 @@ export default function App() {
 
     return(
       <div style={{fontFamily:font,background:M3.background,minHeight:"100vh",color:M3.onSurface,paddingBottom:90}}>
-        {sectionPickerItem&&<SectionPickerModal item={sectionPickerItem} onSelect={handleSectionSelect} onClose={()=>setSectionPickerItem(null)}/>}
+        {aisleEditorItem&&<AisleEditorModal item={aisleEditorItem} onSelect={handleAisleSelect} onClose={()=>setAisleEditorItem(null)}/>}
         <div style={{background:M3.primary,padding:"14px 16px 14px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
             <div style={{fontSize:22,fontWeight:500,color:M3.onPrimary,letterSpacing:-0.2}}>{APP_NAME}</div>
@@ -631,7 +585,7 @@ export default function App() {
               <div key={sec.key} style={{margin:"10px 14px 0"}}>
                 <div style={sectionLabel}>{sec.label}</div>
                 {grouped[sec.key].filter(item=>!checkedItems.has(item.key)).map(item=>(
-                  <DraggableMBItem
+                  <MBItem
                     key={item.key}
                     item={item}
                     sec={sec}
@@ -643,11 +597,7 @@ export default function App() {
                     onSaveEdit={saveEdit}
                     onCancelEdit={()=>setEditingKey(null)}
                     onRemove={removeItem}
-                    onSectionPick={handleSectionPick}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    isDraggingOver={dragOverItemKey===item.key}
+                    onAislePick={handleAislePick}
                     recipes={recipes}
                     setSelectedId={setSelectedId}
                     setView={setView}
@@ -665,13 +615,16 @@ export default function App() {
                   const sec=STORE_SECTIONS.find(s=>s.key===item.sectionKey);
                   const rnames=item.recipeList||[item.recipe];
                   return(
-                    <div key={item.key} style={{background:M3.surface,borderRadius:12,border:"0.5px solid "+M3.outlineVariant,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10,opacity:0.5}}>
+                    <div key={item.key} style={{background:M3.surface,borderRadius:12,border:"0.5px solid "+M3.outlineVariant,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10,opacity:0.6}}>
                       <div onClick={()=>toggleItem(item.key)} style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+M3.primary,background:M3.primary,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:2}}><svg width="10" height="10" viewBox="0 0 10 10"><polyline points="2,5 4,7 8,3" stroke={M3.onPrimary} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,textDecoration:"line-through",color:M3.onSurfaceVariant}}>{item.text}</div>
                         <div style={{marginTop:2,display:"flex",flexWrap:"wrap",gap:4}}>{rnames.map((name,idx)=><span key={idx} style={{fontSize:11,color:M3.onSurfaceVariant,fontStyle:"italic"}}>{name}{idx<rnames.length-1?",":""}</span>)}</div>
                       </div>
-                      <span onClick={()=>removeItem(item.key)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 5px",flexShrink:0}}>✕</span>
+                      <div style={{display:"flex",gap:4,flexShrink:0,alignItems:"center"}}>
+                        <input type="number" min={1} max={99} placeholder="Qty" value={editingQty} onChange={e=>setEditingQty(e.target.value)} style={{width:40,padding:"4px 6px",borderRadius:4,border:"0.5px solid "+M3.outlineVariant,fontSize:12,fontFamily:font,background:M3.surface,color:M3.onSurface,textAlign:"center"}}/>
+                        <span onClick={()=>removeItem(item.key)} style={{fontSize:13,color:M3.outlineVariant,cursor:"pointer",padding:"2px 5px"}}>✕</span>
+                      </div>
                       {sec&&<span style={{fontSize:10,color:M3.onSurfaceVariant,background:M3.surfaceVariant,borderRadius:6,padding:"2px 7px",whiteSpace:"nowrap",flexShrink:0}}>A{sec.aisle}</span>}
                     </div>
                   );
