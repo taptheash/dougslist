@@ -155,7 +155,7 @@ function AisleEditorModal({item, onSelect, onClose}){
 }
 
 // ── MB Item (no drag-and-drop) ────────────────────────────────────────────────
-function MBItem({item, sec, isEd, editingText, setEditingText, onToggle, onEdit, onSaveEdit, onCancelEdit, onRemove, onAislePick, recipes, setSelectedId, setView}){
+function MBItem({item, sec, isEd, editingText, setEditingText, editingQty, setEditingQty, onToggle, onEdit, onSaveEdit, onCancelEdit, onRemove, onAislePick, recipes, setSelectedId, setView}){
   const rnames = item.recipeList || [item.recipe];
   return (
     <div style={{background:M3.surface,borderRadius:12,border:"0.5px solid "+M3.outlineVariant,padding:"10px 12px",marginBottom:4,display:"flex",alignItems:"flex-start",gap:10}}>
@@ -595,6 +595,8 @@ export default function App() {
                     isEd={editingKey===item.key}
                     editingText={editingText}
                     setEditingText={setEditingText}
+                    editingQty={editingQty}
+                    setEditingQty={setEditingQty}
                     onToggle={toggleItem}
                     onEdit={startEdit}
                     onSaveEdit={saveEdit}
