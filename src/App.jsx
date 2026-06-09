@@ -162,7 +162,10 @@ function MBItem({item, sec, isEd, editingText, setEditingText, onToggle, onEdit,
       <div onClick={()=>onToggle(item.key)} style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+M3.outline,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",marginTop:2}}/>
       <div style={{flex:1,minWidth:0}}>
         {isEd
-          ? <input autoFocus value={editingText} onChange={e=>setEditingText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")onSaveEdit(item.key);if(e.key==="Escape")onCancelEdit();}} onBlur={()=>onSaveEdit(item.key)} style={{width:"100%",fontSize:14,padding:"3px 8px",border:"1.5px solid "+M3.primary,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box",background:M3.surface,color:M3.onSurface}}/>
+          ? <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <input type="number" min={1} max={99} autoFocus value={editingQty} onChange={e=>setEditingQty(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")onSaveEdit(item.key);if(e.key==="Escape")onCancelEdit();}} style={{width:50,fontSize:14,padding:"5px 6px",border:"1.5px solid "+M3.primary,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box",background:M3.surface,color:M3.onSurface,textAlign:"center"}}/>
+              <input value={editingText} onChange={e=>setEditingText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")onSaveEdit(item.key);if(e.key==="Escape")onCancelEdit();}} onBlur={()=>onSaveEdit(item.key)} placeholder="item name" style={{flex:1,fontSize:14,padding:"5px 8px",border:"1.5px solid "+M3.primary,borderRadius:6,fontFamily:font,outline:"none",boxSizing:"border-box",background:M3.surface,color:M3.onSurface}}/>
+            </div>
           : <div>
               <div onClick={()=>onToggle(item.key)} style={{fontSize:14,color:M3.onSurface,cursor:"pointer"}}>{item.text}</div>
               <div style={{marginTop:3,display:"flex",flexWrap:"wrap",gap:4}}>
@@ -440,8 +443,8 @@ export default function App() {
   const toggleCheck=(id,e)=>{e.stopPropagation();setCheckedIds(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);saveShop({checkedIds:[...n]});return n;});};
   const toggleItem=(key)=>{setCheckedItems(p=>{const n=new Set(p);n.has(key)?n.delete(key):n.add(key);saveShop({checkedItems:[...n]});return n;});};
   const removeItem=(key)=>{setRemovedKeys(p=>{const n=new Set(p);n.add(key);saveShop({removedKeys:[...n]});return n;});setCheckedItems(p=>{const n=new Set(p);n.delete(key);saveShop({checkedItems:[...n]});return n;});};
-  const startEdit=(key,text,e)=>{e.stopPropagation();setEditingKey(key);setEditingText(text);setEditingQty("");};
-  const saveEdit=(key)=>{if(!editingText.trim()){setEditingKey(null);return;}const u=manualItems.map(m=>m.key===key?{...m,text:editingText.trim()}:m);setManualItems(u);saveShop({manualItems:u});setEditingKey(null);setEditingQty("");};
+  const startEdit=(key,text,e)=>{e.stopPropagation();const match=text.match(/^(\d+)\s+(.+)$/);setEditingKey(key);setEditingText(match?match[2]:text);setEditingQty(match?match[1]:"");};
+  const saveEdit=(key)=>{if(!editingText.trim()){setEditingKey(null);return;}const qty=parseInt(editingQty)||1;const finalText=qty>1?`${qty} ${editingText.trim()}`:editingText.trim();const u=manualItems.map(m=>m.key===key?{...m,text:finalText}:m);setManualItems(u);saveShop({manualItems:u});setEditingKey(null);setEditingQty("");};
   const addManual=()=>{if(!manualInput.trim())return;const qty=parseInt(manualQty)||1;const text=qty>1?`${qty} ${manualInput.trim()}`:manualInput.trim();const item={key:`m${Date.now()}`,text,recipe:"Added manually",manual:true};const u=[...manualItems,item];setManualItems(u);saveShop({manualItems:u});setManualInput("");setManualQty("");};
   const addTargetItem=()=>{if(!targetInput.trim())return;const qty=parseInt(targetQty)||1;const text=qty>1?`${qty} ${targetInput.trim()}`:targetInput.trim();const item={key:`t${Date.now()}`,text,category:classifyTarget(targetInput.trim())};const u=[...targetItems,item];setTargetItems(u);setDoc(doc(db,"app","target"),{items:u,checked:[...targetChecked]},{merge:true});setTargetInput("");setTargetQty("");};
   const toggleTargetItem=(key)=>{setTargetChecked(p=>{const n=new Set(p);n.has(key)?n.delete(key):n.add(key);setDoc(doc(db,"app","target"),{checked:[...n]},{merge:true});return n;});};
