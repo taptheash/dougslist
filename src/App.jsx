@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch
 } from "firebase/firestore";
@@ -196,6 +197,7 @@ export default function App() {
   // ── State ──
   const [recipes,setRecipes]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [authReady,setAuthReady]=useState(false);
   const [activeTab,setActiveTab]=useState("All");
   const [search,setSearch]=useState("");
   const [sortAZ,setSortAZ]=useState(true);
@@ -251,6 +253,14 @@ export default function App() {
   useEffect(()=>{window.scrollTo(0,0);},[view]);
 
   useEffect(()=>{
+    const unsub=onAuthStateChanged(auth,(u)=>{
+      if(u){setAuthReady(true);}else{signInAnonymously(auth).catch(err=>console.error("Anonymous sign-in failed:",err));}
+    });
+    return()=>unsub();
+  },[]);
+
+  useEffect(()=>{
+    if(!authReady)return;
     const run=async()=>{
       const snap=await getDocs(collection(db,"recipes"));
       const batch=writeBatch(db);let need=false;
@@ -258,17 +268,19 @@ export default function App() {
       if(need)await batch.commit();
     };
     run();
-  },[]);
+  },[authReady]);
 
   useEffect(()=>{
+    if(!authReady)return;
     const unsub=onSnapshot(collection(db,"recipes"),(snap)=>{
       setRecipes(snap.docs.map(d=>({id:d.id,...d.data(),servings:d.data().servings||d.data().baseServings})));
       setLoading(false);
     });
     return()=>unsub();
-  },[]);
+  },[authReady]);
 
   useEffect(()=>{
+    if(!authReady)return;
     const unsub=onSnapshot(doc(db,"app","shopping"),(snap)=>{
       if(snap.exists()){
         const data=snap.data();
@@ -280,9 +292,10 @@ export default function App() {
       shoppingLoaded.current=true;
     });
     return()=>unsub();
-  },[]);
+  },[authReady]);
 
   useEffect(()=>{
+    if(!authReady)return;
     const unsub=onSnapshot(doc(db,"app","mbSettings"),(snap)=>{
       if(snap.exists()){
         const data=snap.data();
@@ -291,9 +304,10 @@ export default function App() {
       }
     });
     return()=>unsub();
-  },[]);
+  },[authReady]);
 
   useEffect(()=>{
+    if(!authReady)return;
     const unsub=onSnapshot(doc(db,"app","target"),(snap)=>{
       if(snap.exists()){
         const data=snap.data();
@@ -308,9 +322,10 @@ export default function App() {
       }
     });
     return()=>unsub();
-  },[]);
+  },[authReady]);
 
   useEffect(()=>{
+    if(!authReady)return;
     const unsub=onSnapshot(doc(db,"app","lowes"),(snap)=>{
       if(snap.exists()){
         const data=snap.data();
@@ -325,7 +340,7 @@ export default function App() {
       }
     });
     return()=>unsub();
-  },[]);
+  },[authReady]);
 
   useEffect(()=>{
     const tt=targetItems.length,tc=targetItems.filter(i=>targetChecked.has(i.key)).length;
