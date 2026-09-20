@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Design tokens
+   Neutrals: Tailwind slate. Accent: indigo. Success: emerald. Danger: red.
+   ══════════════════════════════════════════════════════════════════════════ */
+@theme {
+  --font-sans: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --animate-pop: pop 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --animate-rise: rise 220ms ease-out both;
+  --animate-sheet: sheet 280ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  --animate-fade: fade 160ms ease-out both;
+}
+
+@keyframes pop {
+  0%   { transform: scale(0.3); opacity: 0; }
+  60%  { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes sheet {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Custom utilities
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Horizontal chip strips scroll without a visible scrollbar */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Respect the iOS home-indicator inset on the fixed bottom dock */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Park the floating input bar at the bottom of the viewport */
+@utility float-bottom {
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Clear the floating input bar at the end of a scrolling list */
+@utility pb-float {
+  padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Base
+   ══════════════════════════════════════════════════════════════════════════ */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    /* Fallback until <AppHeader> measures itself; keeps sticky section
+       headers from jumping on first paint. */
+    --hdr-h: 3.5rem;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-family: var(--font-sans);
+    overscroll-behavior-y: none;
+  }
+
+  /* Inherit the app font into form controls */
+  input,
+  textarea,
+  select,
+  button {
+    font-family: inherit;
+  }
+
+  /* Kill the spinner on number inputs — quantity fields use their own affordances */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Visible, consistent focus ring for keyboard users only */
+  :focus-visible {
+    @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-50;
+  }
+
+  /* Honour the OS "reduce motion" setting */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
