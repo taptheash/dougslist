@@ -1,0 +1,136 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "doug's list",
+      "intents": [
+        { "name": "AMAZON.CancelIntent", "samples": [] },
+        { "name": "AMAZON.HelpIntent", "samples": [] },
+        { "name": "AMAZON.StopIntent", "samples": [] },
+        { "name": "AMAZON.NavigateHomeIntent", "samples": [] },
+        { "name": "AMAZON.FallbackIntent", "samples": [] },
+        {
+          "name": "AddItemIntent",
+          "slots": [
+            { "name": "item", "type": "ShoppingItem" },
+            { "name": "store", "type": "StoreName" }
+          ],
+          "samples": [
+            "add {item}",
+            "add {item} to {store}",
+            "add {item} to the {store} list",
+            "add {item} to my {store} list",
+            "add {item} to the list",
+            "add {item} to my list",
+            "put {item} on {store}",
+            "put {item} on the {store} list",
+            "put {item} on the list",
+            "put {item} on my list",
+            "we need {item}",
+            "we need {item} from {store}",
+            "I need {item}",
+            "I need {item} from {store}"
+          ]
+        },
+        {
+          "name": "RemoveItemIntent",
+          "slots": [
+            { "name": "item", "type": "ShoppingItem" },
+            { "name": "store", "type": "StoreName" }
+          ],
+          "samples": [
+            "remove {item}",
+            "remove {item} from {store}",
+            "remove {item} from the {store} list",
+            "remove {item} from the list",
+            "remove {item} from my list",
+            "take {item} off {store}",
+            "take {item} off the {store} list",
+            "take {item} off the list",
+            "take {item} off my list",
+            "delete {item}",
+            "delete {item} from {store}"
+          ]
+        },
+        {
+          "name": "ReadListIntent",
+          "slots": [
+            { "name": "store", "type": "StoreName" }
+          ],
+          "samples": [
+            "what's on {store}",
+            "what's on the {store} list",
+            "what's on my {store} list",
+            "what's on the list",
+            "what's on my list",
+            "what is on {store}",
+            "what is on the list",
+            "read {store}",
+            "read the {store} list",
+            "read the list",
+            "read my list"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "StoreName",
+          "values": [
+            { "id": "mb", "name": { "value": "market basket", "synonyms": ["the market basket", "market", "groceries", "grocery", "grocery store", "supermarket", "food"] } },
+            { "id": "target", "name": { "value": "target", "synonyms": [] } },
+            { "id": "lowes", "name": { "value": "lowe's", "synonyms": ["lowes", "lowe", "hardware", "hardware store"] } }
+          ]
+        },
+        {
+          "name": "ShoppingItem",
+          "values": [
+            { "name": { "value": "milk" } },
+            { "name": { "value": "eggs" } },
+            { "name": { "value": "bread" } },
+            { "name": { "value": "butter" } },
+            { "name": { "value": "coffee" } },
+            { "name": { "value": "half and half" } },
+            { "name": { "value": "heavy cream" } },
+            { "name": { "value": "cheddar cheese" } },
+            { "name": { "value": "greek yogurt" } },
+            { "name": { "value": "bananas" } },
+            { "name": { "value": "apples" } },
+            { "name": { "value": "lemons" } },
+            { "name": { "value": "baby spinach" } },
+            { "name": { "value": "romaine lettuce" } },
+            { "name": { "value": "red peppers" } },
+            { "name": { "value": "yellow onions" } },
+            { "name": { "value": "garlic" } },
+            { "name": { "value": "potatoes" } },
+            { "name": { "value": "chicken breasts" } },
+            { "name": { "value": "ground beef" } },
+            { "name": { "value": "pork chops" } },
+            { "name": { "value": "shrimp" } },
+            { "name": { "value": "bacon" } },
+            { "name": { "value": "breakfast sausage" } },
+            { "name": { "value": "olive oil" } },
+            { "name": { "value": "spaghetti" } },
+            { "name": { "value": "marinara sauce" } },
+            { "name": { "value": "chicken broth" } },
+            { "name": { "value": "flour" } },
+            { "name": { "value": "sugar" } },
+            { "name": { "value": "paper towels" } },
+            { "name": { "value": "toilet paper" } },
+            { "name": { "value": "dish soap" } },
+            { "name": { "value": "laundry detergent" } },
+            { "name": { "value": "trash bags" } },
+            { "name": { "value": "aluminum foil" } },
+            { "name": { "value": "light bulbs" } },
+            { "name": { "value": "batteries" } },
+            { "name": { "value": "furnace filter" } },
+            { "name": { "value": "duct tape" } },
+            { "name": { "value": "deck screws" } },
+            { "name": { "value": "potting soil" } },
+            { "name": { "value": "two gallons of milk" } },
+            { "name": { "value": "a dozen eggs" } },
+            { "name": { "value": "three cans of diced tomatoes" } }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { onRequestPost as importPhoto } from "./functions/api/import-photo.js";
 import { onRequestPost as importUrl } from "./functions/api/import-url.js";
+import { onRequestAlexa } from "./functions/api/alexa.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -10,6 +11,9 @@ export default {
     }
     if (url.pathname === "/api/import-url" && request.method === "POST") {
       return importUrl({ request, env, ctx });
+    }
+    if (url.pathname.startsWith("/api/alexa/")) {
+      return onRequestAlexa({ request, env, ctx });
     }
 
     return env.ASSETS.fetch(request);
