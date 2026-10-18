@@ -2,11 +2,11 @@
 
 What you'll be able to say:
 
-- "Alexa, tell Doug's List to add milk" → Market Basket (the default)
-- "Alexa, tell Doug's List to add light bulbs to Lowe's"
-- "Alexa, tell Doug's List to add two cans of diced tomatoes" → saved as "2 Cans of diced tomatoes"
-- "Alexa, tell Doug's List to remove eggs from Target"
-- "Alexa, ask Doug's List what's on Market Basket"
+- "Alexa, tell dougs app to add milk" → Market Basket (the default)
+- "Alexa, tell dougs app to add light bulbs to Lowe's"
+- "Alexa, tell dougs app to add two cans of diced tomatoes" → saved as "2 Cans of diced tomatoes"
+- "Alexa, tell dougs app to remove eggs from Target"
+- "Alexa, ask dougs app what's on Market Basket"
 
 It works with Market Basket, Target, Lowe's, and any custom stores you've created. Removing works on recipe-driven Market Basket items too (it does the same thing as tapping remove in the app).
 
@@ -82,13 +82,13 @@ Alexa can't log in through the Access email gate, so this one path needs a bypas
 ## Step 4: Test in the simulator
 
 1. In the Alexa console, open the **Test** tab and switch "Skill testing is enabled in" from Off to **Development**.
-2. Type: `tell doug's list to add milk`
+2. Type: `tell dougs app to add milk`
    - ✅ Alexa replies "Added Milk to Market Basket," and Milk appears in the app.
    - The JSON Output panel on the right shows exactly what the endpoint sent back.
 
 ## Step 5: Try it on the Echo
 
-Say: "Alexa, tell Doug's List to add milk."
+Say: "Alexa, tell dougs app to add milk."
 
 The skill appears automatically on every Echo registered to your Amazon account. You don't need to enable it. You'll find it in the Alexa app under **More → Skills & Games → Your Skills → Dev**.
 

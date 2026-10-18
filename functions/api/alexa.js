@@ -1,9 +1,9 @@
 // Alexa custom skill endpoint — POST /api/alexa/<ALEXA_PATH_SECRET>
 //
-// "Alexa, tell Doug's List to add milk"                  -> Market Basket
-// "Alexa, tell Doug's List to add two light bulbs to Lowe's"
-// "Alexa, tell Doug's List to remove eggs from Market Basket"
-// "Alexa, ask Doug's List what's on Target"
+// "Alexa, ask chase household to add milk"                  -> Market Basket
+// "Alexa, ask chase household to add two light bulbs to Lowe's"
+// "Alexa, ask chase household to remove eggs from Market Basket"
+// "Alexa, ask chase household what's on Target"
 //
 // Writes Firestore through the REST API using the same anonymous sign-in the
 // web app uses, so it is allowed by the same security rules. Items are written

@@ -9,7 +9,7 @@ import {
   CATEGORIES, STORE_SECTIONS, TARGET_CATEGORIES,
   classifyTarget, LOWES_CATEGORIES, classifyLowes,
   classifyIngredient,
-  toShoppingText, combineItems,
+  toShoppingText, combineItems, parseAmount,
   produceSubSort
 } from "./config.js";
 import {
@@ -723,9 +723,16 @@ function MBItem({
 
       <div className="min-w-0 flex-1">
         {isEd ? (
-          <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-2"
+            onBlur={(e) => {
+              // Save when focus leaves the whole edit row (tapping elsewhere),
+              // not when moving between the qty and name boxes or onto OK/Cancel.
+              if (!e.currentTarget.contains(e.relatedTarget)) onSaveEdit(item.key);
+            }}
+          >
             <input
-              type="number" min={1} max={99} autoFocus
+              type="number" inputMode="numeric" min={1} max={99} autoFocus placeholder="Qty"
               value={editingQty}
               onChange={(e) => setEditingQty(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") onSaveEdit(item.key); if (e.key === "Escape") onCancelEdit(); }}
@@ -733,12 +740,32 @@ function MBItem({
             />
             <input
               value={editingText}
+              enterKeyHint="done"
               onChange={(e) => setEditingText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") onSaveEdit(item.key); if (e.key === "Escape") onCancelEdit(); }}
-              onBlur={() => onSaveEdit(item.key)}
               placeholder="item name"
               className="min-w-0 flex-1 rounded-lg px-2.5 py-1.5 text-[14px] ring-2 ring-indigo-500 focus:outline-none"
             />
+            <button
+              type="button"
+              title="Save"
+              aria-label="Save"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onSaveEdit(item.key)}
+              className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-[13px] font-semibold text-white transition-all duration-150 hover:bg-indigo-700 active:scale-95"
+            >
+              OK
+            </button>
+            <button
+              type="button"
+              title="Cancel"
+              aria-label="Cancel"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={onCancelEdit}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition-all duration-150 hover:bg-slate-100 hover:text-slate-700 active:scale-90"
+            >
+              <X size={14} />
+            </button>
           </div>
         ) : (
           <>
@@ -772,10 +799,10 @@ function MBItem({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+      {!isEd && <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
         <IconBtn icon={Pencil} size={13} title="Edit item" onClick={(e) => onEdit(item.key, item.text, e)} />
         <IconBtn icon={X} size={14} title="Remove item" onClick={() => onRemove(item.key)} tone="text-slate-400 hover:bg-red-50 hover:text-red-600" />
-      </div>
+      </div>}
 
       <button
         type="button"
@@ -1630,12 +1657,62 @@ export default function App() {
     setEditingQty(match ? match[1] : "");
   };
 
+  /**
+   * Save an edited Market Basket row. A row can be a manual item, a recipe
+   * ingredient, or several of those combined into one line ("3 garlic").
+   * Manual-only edits update the item in place. Anything involving recipe
+   * ingredients replaces the whole row with one manual item carrying the new
+   * text, and hides the recipe originals (same as tapping remove), so the
+   * new quantity sticks instead of being recomputed from the recipe.
+   */
+  const editSavingRef = useRef(false);
   const saveEdit = (key) => {
-    if (!editingText.trim()) { setEditingKey(null); return; }
+    if (editSavingRef.current) return; // OK + blur can fire together
+    editSavingRef.current = true;
+    setTimeout(() => { editSavingRef.current = false; }, 0);
+
+    const done = () => { setEditingKey(null); setEditingQty(""); };
+    const name = editingText.trim();
+    if (!name) { done(); return; }
     const qty = parseInt(editingQty) || 1;
-    const finalText = qty > 1 ? qty + " " + editingText.trim() : editingText.trim();
-    const u = manualItems.map((m) => (m.key === key ? { ...m, text: finalText } : m));
-    setManualItems(u); saveShop({ manualItems: u }); setEditingKey(null); setEditingQty("");
+    // Keep an explicit "1" in front of a unit ("1 lb ground beef"), drop it otherwise ("milk").
+    const startsWithUnit = /^(lb|lbs|oz|can|cans|cup|cups|tbsp|tsp|clove|cloves|stalk|stalks|head|heads|bunch|bunches|piece|pieces|pkg|bag|bags|box|boxes|jar|jars|bottle|bottles|gallon|gallons)\b/i.test(name);
+    const finalText = qty > 1 || startsWithUnit ? qty + " " + name : name;
+
+    const orig = allShoppingItems.find((i) => i.key === key);
+    if (!orig) { done(); return; }
+
+    // Every underlying item that combineItems merged into this displayed row.
+    const groupOf = (i) => { const p = parseAmount(i.text); return p.name + "|" + (p.unit || ""); };
+    const g = groupOf(orig);
+    const members = allShoppingItems.filter(
+      (i) => i.sectionKey === orig.sectionKey && !checkedItems.has(i.key) && groupOf(i) === g
+    );
+    const memberKeys = new Set(members.map((m) => m.key));
+
+    // Simple case: one manual item. Update it where it is.
+    if (members.length === 1 && orig.manual) {
+      if (orig.text !== finalText) {
+        const u = manualItems.map((m) => (m.key === key ? { ...m, text: finalText } : m));
+        setManualItems(u); saveShop({ manualItems: u });
+      }
+      done(); return;
+    }
+
+    // Recipe and/or combined rows: replace them with one manual item.
+    const keepKey = orig.manual ? orig.key : "m" + Date.now();
+    const recipeLabel = members.find((m) => !m.manual)?.recipe || orig.recipe || "Added manually";
+    const u = [
+      ...manualItems.filter((m) => !memberKeys.has(m.key)),
+      { key: keepKey, text: finalText, recipe: recipeLabel, manual: true },
+    ];
+    const recipeKeys = members.filter((m) => !m.manual).map((m) => m.key);
+    const nRemoved = new Set([...removedKeys, ...recipeKeys]);
+    const nChecked = new Set([...checkedItems].filter((k) => !memberKeys.has(k)));
+
+    setManualItems(u); setRemovedKeys(nRemoved); setCheckedItems(nChecked);
+    saveShop({ manualItems: u, removedKeys: [...nRemoved], checkedItems: [...nChecked] });
+    done();
   };
 
   const saveCompletedQty = (key, rawQty) => {
