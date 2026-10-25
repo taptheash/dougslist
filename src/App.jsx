@@ -1571,17 +1571,31 @@ export default function App() {
     return items;
   }, [checkedIds, recipes, manualItems, removedKeys, aisleRules]);
 
+  /**
+   * Active (unchecked) rows, grouped by aisle. Only unchecked items are
+   * combined, and each combined row carries the keys of every item it stands
+   * for, so checking or removing "3 garlic" acts on all of them. (Previously
+   * checked and unchecked items were combined together, so checking a
+   * combined row could hide its other members while they still counted as
+   * unchecked: the list showed everything done but stuck below 100%.)
+   */
   const grouped = useMemo(() => {
     const g = {};
     STORE_SECTIONS.forEach((s) => { g[s.key] = []; });
-    allShoppingItems.forEach((item) => { (g[item.sectionKey] || g["kitchen"]).push(item); });
+    allShoppingItems
+      .filter((item) => !checkedItems.has(item.key))
+      .forEach((item) => { (g[item.sectionKey] || g["kitchen"]).push(item); });
+    const groupOf = (i) => { const p = parseAmount(i.text); return p.name + "|" + (p.unit || ""); };
     const c = {};
     Object.keys(g).forEach((k) => {
-      let items = combineItems(g[k]);
+      const items = combineItems(g[k]).map((row) => ({
+        ...row,
+        keys: g[k].filter((i) => groupOf(i) === row.parsed.name + "|" + (row.unit || "")).map((i) => i.key),
+      }));
       c[k] = k === "produce" ? produceSubSort(items) : items;
     });
     return c;
-  }, [allShoppingItems]);
+  }, [allShoppingItems, checkedItems]);
 
   const total = allShoppingItems.length;
   const checked = allShoppingItems.filter((i) => checkedItems.has(i.key)).length;
@@ -1642,6 +1656,22 @@ export default function App() {
 
   const toggleItem = (key) => {
     setCheckedItems((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); saveShop({ checkedItems: [...n] }); return n; });
+  };
+
+  /** Check (or uncheck) every item behind a combined row at once. */
+  const toggleKeys = (keys) => {
+    setCheckedItems((p) => {
+      const n = new Set(p);
+      const allOn = keys.every((k) => n.has(k));
+      keys.forEach((k) => (allOn ? n.delete(k) : n.add(k)));
+      saveShop({ checkedItems: [...n] });
+      return n;
+    });
+  };
+
+  const removeKeys = (keys) => {
+    setRemovedKeys((p) => { const n = new Set(p); keys.forEach((k) => n.add(k)); saveShop({ removedKeys: [...n] }); return n; });
+    setCheckedItems((p) => { const n = new Set(p); keys.forEach((k) => n.delete(k)); saveShop({ checkedItems: [...n] }); return n; });
   };
 
   const removeItem = (key) => {
@@ -2682,11 +2712,11 @@ export default function App() {
                               setEditingText={setEditingText}
                               editingQty={editingQty}
                               setEditingQty={setEditingQty}
-                              onToggle={toggleItem}
+                              onToggle={() => toggleKeys(item.keys || [item.key])}
                               onEdit={startEdit}
                               onSaveEdit={saveEdit}
                               onCancelEdit={() => setEditingKey(null)}
-                              onRemove={removeItem}
+                              onRemove={() => removeKeys(item.keys || [item.key])}
                               onAislePick={handleAislePick}
                               recipes={recipes}
                               setSelectedId={setSelectedId}
