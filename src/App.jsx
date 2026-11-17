@@ -1284,6 +1284,9 @@ export default function App() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [checkedIds, setCheckedIds] = useState(new Set());
   const [checkedItems, setCheckedItems] = useState(new Set());
+  /* Keys checked off during the current trip. Drives the progress counter so
+     items left checked from earlier trips don't count. */
+  const [tripChecked, setTripChecked] = useState(new Set());
   const [manualItems, setManualItems] = useState([]);
   const [removedKeys, setRemovedKeys] = useState(new Set());
   const [manualInput, setManualInput] = useState("");
@@ -1371,6 +1374,7 @@ export default function App() {
         const data = snap.data();
         setCheckedIds(new Set(data.checkedIds || []));
         setCheckedItems(new Set(data.checkedItems || []));
+        setTripChecked(new Set(data.tripChecked || []));
         setManualItems(data.manualItems || []);
         setRemovedKeys(new Set(data.removedKeys || []));
       }
@@ -1607,12 +1611,28 @@ export default function App() {
       const bn = (parseAmount(b.text).name || b.text).toLowerCase();
       return an.localeCompare(bn) || a.text.localeCompare(b.text);
     });
-  /* Progress counts the rows actually on screen: combined active rows plus
-     completed rows, so "3/10" matches what you see on the list. */
+  /* Progress = items checked off this trip / (those + rows still active).
+     Starts at 0/N, climbs to N/N, then drops to 0/0 once nothing is left.
+     Items checked on a previous trip are not counted. Combined rows count
+     once, matching what's on screen. */
   const activeRowCount = STORE_SECTIONS.reduce((n, s) => n + (grouped[s.key]?.length || 0), 0);
-  const checked = completedItems.length;
+  const checked = new Set(
+    completedItems
+      .filter((i) => tripChecked.has(i.key))
+      .map((i) => { const p = parseAmount(i.text); return i.sectionKey + "|" + p.name + "|" + (p.unit || ""); })
+  ).size;
   const listTotal = activeRowCount + checked;
   const pct = listTotal > 0 ? Math.round((checked / listTotal) * 100) : 0;
+
+  /* Trip finished: hold N/N briefly, then clear the trip so it reads 0/0. */
+  useEffect(() => {
+    if (activeRowCount > 0 || tripChecked.size === 0) return;
+    const t = setTimeout(() => {
+      setTripChecked(new Set());
+      saveShop({ tripChecked: [] });
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [activeRowCount, tripChecked]);
 
   /* ── Sidebar counts ────────────────────────────────────────────────────── */
   const navCounts = useMemo(() => {
@@ -1655,8 +1675,8 @@ export default function App() {
 
   /* ── Market Basket mutations ───────────────────────────────────────────── */
   const resetShopping = () => {
-    const e = { checkedIds: [], checkedItems: [], manualItems: [], removedKeys: [], resetAt: null };
-    setCheckedIds(new Set()); setCheckedItems(new Set()); setManualItems([]);
+    const e = { checkedIds: [], checkedItems: [], tripChecked: [], manualItems: [], removedKeys: [], resetAt: null };
+    setCheckedIds(new Set()); setCheckedItems(new Set()); setTripChecked(new Set()); setManualItems([]);
     setRemovedKeys(new Set()); setEditingKey(null); saveShop(e);
   };
 
@@ -1665,12 +1685,24 @@ export default function App() {
     setCheckedIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); saveShop({ checkedIds: [...n] }); return n; });
   };
 
+  /** Add keys to (on) or drop them from (off) the current trip. */
+  const updateTrip = (keys, on) => {
+    setTripChecked((p) => {
+      const n = new Set(p);
+      keys.forEach((k) => (on ? n.add(k) : n.delete(k)));
+      saveShop({ tripChecked: [...n] });
+      return n;
+    });
+  };
+
   const toggleItem = (key) => {
+    updateTrip([key], !checkedItems.has(key));
     setCheckedItems((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); saveShop({ checkedItems: [...n] }); return n; });
   };
 
   /** Check (or uncheck) every item behind a combined row at once. */
   const toggleKeys = (keys) => {
+    updateTrip(keys, !keys.every((k) => checkedItems.has(k)));
     setCheckedItems((p) => {
       const n = new Set(p);
       const allOn = keys.every((k) => n.has(k));
@@ -1681,11 +1713,13 @@ export default function App() {
   };
 
   const removeKeys = (keys) => {
+    updateTrip(keys, false);
     setRemovedKeys((p) => { const n = new Set(p); keys.forEach((k) => n.add(k)); saveShop({ removedKeys: [...n] }); return n; });
     setCheckedItems((p) => { const n = new Set(p); keys.forEach((k) => n.delete(k)); saveShop({ checkedItems: [...n] }); return n; });
   };
 
   const removeItem = (key) => {
+    updateTrip([key], false);
     setRemovedKeys((p) => { const n = new Set(p); n.add(key); saveShop({ removedKeys: [...n] }); return n; });
     setCheckedItems((p) => { const n = new Set(p); n.delete(key); saveShop({ checkedItems: [...n] }); return n; });
   };
