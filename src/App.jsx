@@ -1598,10 +1598,21 @@ export default function App() {
   }, [allShoppingItems, checkedItems]);
 
   const total = allShoppingItems.length;
-  const checked = allShoppingItems.filter((i) => checkedItems.has(i.key)).length;
-  const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
   const activeSections = STORE_SECTIONS.filter((s) => grouped[s.key]?.some((i) => !checkedItems.has(i.key)));
-  const completedItems = allShoppingItems.filter((i) => checkedItems.has(i.key));
+  /* Completed rows, alphabetized by item name (leading quantity ignored). */
+  const completedItems = allShoppingItems
+    .filter((i) => checkedItems.has(i.key))
+    .sort((a, b) => {
+      const an = (parseAmount(a.text).name || a.text).toLowerCase();
+      const bn = (parseAmount(b.text).name || b.text).toLowerCase();
+      return an.localeCompare(bn) || a.text.localeCompare(b.text);
+    });
+  /* Progress counts the rows actually on screen: combined active rows plus
+     completed rows, so "3/10" matches what you see on the list. */
+  const activeRowCount = STORE_SECTIONS.reduce((n, s) => n + (grouped[s.key]?.length || 0), 0);
+  const checked = completedItems.length;
+  const listTotal = activeRowCount + checked;
+  const pct = listTotal > 0 ? Math.round((checked / listTotal) * 100) : 0;
 
   /* ── Sidebar counts ────────────────────────────────────────────────────── */
   const navCounts = useMemo(() => {
@@ -2570,7 +2581,7 @@ export default function App() {
   const customTotal = isCustom ? store.items.length : 0;
   const customCC = isCustom ? store.items.filter((i) => customDone.has(i.key)).length : 0;
 
-  const cTotal = isCustom ? customTotal : storeTab === "mb" ? total : storeTab === "target" ? targetTotal : lowesTotal;
+  const cTotal = isCustom ? customTotal : storeTab === "mb" ? listTotal : storeTab === "target" ? targetTotal : lowesTotal;
   const cChecked = isCustom ? customCC : storeTab === "mb" ? checked : storeTab === "target" ? targetCC : lowesCC;
   const cPct = cTotal > 0 ? Math.round((cChecked / cTotal) * 100) : 0;
 
