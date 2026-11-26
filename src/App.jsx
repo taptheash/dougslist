@@ -3907,6 +3907,20 @@ function AppMain() {
   };
   const thisWeek = mealPlan && mealPlan.weekOf === weekStart() ? mealPlan : null;
 
+  // A plan made by the Pi (or another device) arrives with apply:true — put it on the list here.
+  const applyingRef = useRef(false);
+  useEffect(() => {
+    if (loading || !mealPlan?.apply || applyingRef.current || !shoppingLoaded.current) return;
+    if (mealPlan.weekOf !== weekStart()) return;
+    applyingRef.current = true;
+    const keep = new Set(mealPlan.meals.map((m) => m.id));
+    (mealPlan.prevPlanned || []).forEach((id) => { if (!keep.has(id)) setRecipeOnList(id, false); });
+    mealPlan.meals.forEach((m) => { if (recipes.some((r) => r.id === m.id)) setRecipeOnList(m.id, true); });
+    const { apply, prevPlanned, ...rest } = mealPlan;
+    writePlan({ ...rest, meals: mealPlan.meals.map((m) => ({ ...m, title: m.title || recipes.find((r) => r.id === m.id)?.title || "" })) });
+    setTimeout(() => { applyingRef.current = false; }, 3000);
+  }, [loading, mealPlan, recipes]);
+
   // First open of a new week: plan it automatically.
   useEffect(() => {
     if (loading || mealPlan === undefined || !planSettings.on || planTriedRef.current) return;

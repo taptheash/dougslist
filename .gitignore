@@ -3,3 +3,6 @@
 dist/
 node_modules/
 .env
+
+# Pi planner secrets
+pi/planner.env
