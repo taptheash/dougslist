@@ -29,6 +29,14 @@ import {
 /** Join conditional class names. Falsy entries are dropped. */
 const cx = (...parts) => parts.filter(Boolean).join(" ");
 
+/** All categories a recipe shows under: its main one first, then any extras. */
+const RECIPE_CATS = ["Appetizers", "Italian", "Soups & Stews", "Mains", "Meats", "Fish & Seafood", "Vegetables", "Sides", "Desserts", "Breads & Breakfast", "Drinks", "Other"];
+const catsOf = (r) => {
+  const list = [r?.category, ...(Array.isArray(r?.categories) ? r.categories : [])].filter((c) => RECIPE_CATS.includes(c));
+  const u = [...new Set(list)];
+  return u.length ? u : ["Other"];
+};
+
 const isMobile =
   typeof navigator !== "undefined" &&
   navigator.maxTouchPoints > 0 &&
@@ -1661,7 +1669,7 @@ const prepareImage = (file) =>
 
 /** Recipe object ⇄ editable draft (lists become one-per-line text). */
 const toDraft = (r) => ({
-  title: r.title || "", category: r.category || "Other", servings: r.servings || 4,
+  title: r.title || "", cats: catsOf({ category: r.category, categories: r.categories }), servings: r.servings || 4,
   ingredients: (r.ingredients || []).join("\n"), instructions: (r.instructions || []).join("\n"),
   notes: r.notes || "", storage: r.storage || "",
 });
@@ -1669,7 +1677,9 @@ const fromDraft = (d) => {
   const servings = Math.max(1, parseInt(d.servings) || 4);
   return {
     title: d.title.trim() || "Untitled Recipe",
-    category: CATEGORIES.includes(d.category) ? d.category : "Other",
+    category: catsOf({ categories: d.cats })[0],
+    categories: catsOf({ categories: d.cats }),
+    extra_categories: catsOf({ categories: d.cats }).slice(1), // lets the AI keep extras when editing
     servings, baseServings: servings,
     ingredients: d.ingredients.split("\n").map((l) => l.replace(/^[-*•]\s*/, "").trim()).filter(Boolean),
     instructions: d.instructions.split("\n").map((l) => l.replace(/^\d+[.)]\s*/, "").trim()).filter(Boolean),
@@ -2106,7 +2116,7 @@ function IdeasSheet({ existingTitles, onAdd, onOpen, onClose }) {
               <button type="button" onClick={() => update(i, { open: !open })} className="flex w-full items-start gap-3 px-4 py-3 text-left">
                 <div className="min-w-0 flex-1">
                   <div className="text-[14.5px] font-semibold text-slate-900">{r.title}</div>
-                  <div className="mt-0.5 text-[12px] text-slate-400">{r.category} · serves {r.servings} · {r.ingredients.length} ingredients</div>
+                  <div className="mt-0.5 text-[12px] text-slate-400">{catsOf(r).join(", ")} · serves {r.servings} · {r.ingredients.length} ingredients</div>
                   {r.summary && <div className="mt-1 text-[13px] text-slate-600">{r.summary}</div>}
                 </div>
                 <ChevronRight size={16} className={cx("mt-1 shrink-0 text-slate-300 transition-transform", open && "rotate-90")} />
@@ -2313,6 +2323,39 @@ function AiChangeBox({ getRecipe, onApply }) {
   );
 }
 
+/** Pick one or more categories. The first one picked is the main category. */
+function CategoryPicker({ value, onChange }) {
+  const cur = catsOf({ categories: value });
+  const toggle = (c) => {
+    if (cur.includes(c)) { if (cur.length > 1) onChange(cur.filter((x) => x !== c)); }
+    else onChange([...cur, c]);
+  };
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {RECIPE_CATS.map((c) => {
+        const i = cur.indexOf(c);
+        const on = i >= 0;
+        return (
+          <button
+            key={c}
+            type="button"
+            onClick={() => toggle(c)}
+            title={i === 0 ? "Main category" : on ? "Also shows here — tap to remove" : "Also show under " + c}
+            className={cx(
+              "rounded-full px-2.5 py-1 text-[12px] font-medium ring-1 transition-colors",
+              i === 0 ? "bg-indigo-600 text-white ring-indigo-600"
+                : on ? "bg-indigo-50 text-indigo-700 ring-indigo-200"
+                  : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"
+            )}
+          >
+            {on && <Check size={11} strokeWidth={3} className="-ml-0.5 mr-0.5 inline" />}{c}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** One recipe in the review step: editable fields plus "ask for a change". */
 function DraftEditor({ draft, onChange, onRemove }) {
   const set = (k) => (e) => onChange({ ...draft, [k]: e.target.value });
@@ -2326,11 +2369,9 @@ function DraftEditor({ draft, onChange, onRemove }) {
         {onRemove && <IconBtn icon={Trash2} title="Don't import this one" onClick={onRemove} />}
       </div>
 
-      <div className="mt-3 grid grid-cols-[1fr_6rem] gap-2">
-        <Field label="Category">
-          <select value={draft.category} onChange={set("category")} className={INPUT}>
-            {CATEGORIES.filter((c) => c !== "All" && c !== "Favorites").map((c) => <option key={c}>{c}</option>)}
-          </select>
+      <div className="mt-3 grid grid-cols-[1fr_5rem] items-start gap-2">
+        <Field label="Categories" hint="tap to add more">
+          <CategoryPicker value={draft.cats} onChange={(cats) => onChange({ ...draft, cats })} />
         </Field>
         <Field label="Serves">
           <input type="number" min="1" value={draft.servings} onChange={set("servings")} className={INPUT} />
@@ -3357,7 +3398,7 @@ function AppMain() {
     const ids = nr.map((r, i) => {
       const id = "recipe_" + stamp + "_" + i;
       batch.set(doc(db, "recipes", id), {
-        title: r.title, category: r.category, baseServings: r.baseServings, servings: r.servings,
+        title: r.title, category: catsOf(r)[0], categories: catsOf(r), baseServings: r.baseServings, servings: r.servings,
         ingredients: r.ingredients, instructions: r.instructions, favorite: false,
         notes: r.notes || "", storage: r.storage || "",
       });
@@ -3375,7 +3416,7 @@ function AppMain() {
 
   const startEditRecipe = (r) => {
     setEditDraft({
-      title: r.title, category: r.category, servings: r.servings, baseServings: r.baseServings,
+      title: r.title, cats: catsOf(r), servings: r.servings, baseServings: r.baseServings,
       ingredients: r.ingredients.join("\n"), instructions: r.instructions.join("\n"),
       notes: r.notes || "", storage: r.storage || "",
     });
@@ -3385,7 +3426,8 @@ function AppMain() {
   const saveEditRecipe = async (id) => {
     await updateDoc(doc(db, "recipes", id), {
       title: editDraft.title.trim(),
-      category: editDraft.category,
+      category: catsOf({ categories: editDraft.cats })[0],
+      categories: catsOf({ categories: editDraft.cats }),
       servings: Math.max(1, parseInt(editDraft.servings) || 1),
       baseServings: Math.max(1, parseInt(editDraft.baseServings) || parseInt(editDraft.servings) || 1),
       ingredients: editDraft.ingredients.split("\n").map((l) => l.replace(/^[-*•]\s*/, "").trim()).filter(Boolean),
@@ -3407,7 +3449,7 @@ function AppMain() {
   const filtered = useMemo(() => {
     let list = recipes;
     if (activeTab === "Favorites") list = list.filter((r) => r.favorite);
-    else if (activeTab !== "All") list = list.filter((r) => r.category === activeTab);
+    else if (activeTab !== "All") list = list.filter((r) => catsOf(r).includes(activeTab));
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((r) => r.title.toLowerCase().includes(q) || r.ingredients.some((i) => i.toLowerCase().includes(q)));
@@ -3436,7 +3478,7 @@ function AppMain() {
   const runTool = async (name, input = {}) => {
     const A = agentRef.current;
     const findR = (id) => A.recipes.find((r) => r.id === id);
-    const brief = (r) => ({ id: r.id, title: r.title, category: r.category, servings: r.servings, favorite: !!r.favorite, onList: A.checkedIds.has(r.id) });
+    const brief = (r) => ({ id: r.id, title: r.title, categories: catsOf(r), servings: r.servings, favorite: !!r.favorite, onList: A.checkedIds.has(r.id) });
     const activeOn = (sid) => {
       if (sid === "mb") return A.allShoppingItems.filter((i) => !A.checkedItems.has(i.key)).map((i) => i.text + (i.manual ? "" : " (for " + i.recipe + ")"));
       if (sid === "target") return A.targetItems.filter((i) => !A.targetChecked.has(i.key)).map((i) => i.text);
@@ -3451,9 +3493,9 @@ function AppMain() {
         const q = String(input.query || "").toLowerCase().trim();
         const words = q.split(/\s+/).filter((w) => w.length > 1);
         let list = A.recipes;
-        if (input.category) list = list.filter((r) => r.category === input.category);
+        if (input.category) list = list.filter((r) => catsOf(r).includes(input.category));
         if (words.length) list = list.filter((r) => {
-          const hay = (r.title + " " + r.category + " " + r.ingredients.join(" ")).toLowerCase();
+          const hay = (r.title + " " + catsOf(r).join(" ") + " " + r.ingredients.join(" ")).toLowerCase();
           return words.some((w) => hay.includes(w));
         });
         return { count: list.length, recipes: list.slice(0, 150).map(brief) };
@@ -3468,6 +3510,7 @@ function AppMain() {
         const r = {
           title: String(input.title || "Untitled Recipe").trim(),
           category: CATEGORIES.includes(input.category) ? input.category : "Other",
+          categories: catsOf({ category: input.category, categories: input.extra_categories }),
           servings, baseServings: servings,
           ingredients: cleanList(input.ingredients) || [], instructions: cleanList(input.instructions) || [],
           notes: String(input.notes || "").trim(), storage: String(input.storage || "").trim(),
@@ -3480,7 +3523,12 @@ function AppMain() {
         if (!r) return { error: "No recipe with that id." };
         const patch = {};
         if (input.title) patch.title = String(input.title).trim();
-        if (CATEGORIES.includes(input.category)) patch.category = input.category;
+        if (CATEGORIES.includes(input.category) || Array.isArray(input.extra_categories)) {
+          const main = CATEGORIES.includes(input.category) ? input.category : catsOf(r)[0];
+          const extra = Array.isArray(input.extra_categories) ? input.extra_categories : catsOf(r).slice(1);
+          patch.categories = catsOf({ category: main, categories: extra });
+          patch.category = patch.categories[0];
+        }
         if (cleanList(input.ingredients)) patch.ingredients = cleanList(input.ingredients);
         if (cleanList(input.instructions)) patch.instructions = cleanList(input.instructions);
         if (typeof input.notes === "string") patch.notes = input.notes.trim();
@@ -3667,7 +3715,7 @@ function AppMain() {
         <div className="md:pl-64">
           <AppHeader
             title={selected.title}
-            subtitle={selected.category}
+            subtitle={catsOf(selected).join(" · ")}
             onBack={closeDetail}
             backLabel="Recipes"
             right={
@@ -3734,12 +3782,8 @@ function AppMain() {
                   <input value={editDraft.title} onChange={(e) => setEditDraft((d) => ({ ...d, title: e.target.value }))} className={INPUT} />
                 </Field>
 
-                <Field label="Category">
-                  <select value={editDraft.category} onChange={(e) => setEditDraft((d) => ({ ...d, category: e.target.value }))} className={INPUT}>
-                    {CATEGORIES.filter((c) => c !== "All" && c !== "Favorites").map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                <Field label="Categories" hint="first is the main one · tap to add more">
+                  <CategoryPicker value={editDraft.cats} onChange={(cats) => setEditDraft((d) => ({ ...d, cats }))} />
                 </Field>
 
                 <Field label="Servings">
@@ -4031,7 +4075,7 @@ function AppMain() {
                     <Checkbox checked={on} shape="square" onChange={(e) => toggleCheck(r.id, e)} label={"Add " + r.title + " to Market Basket"} />
                     <button type="button" onClick={() => setSelectedId(r.id)} className="min-w-0 flex-1 text-left">
                       <p className="truncate text-[15px] font-semibold text-slate-900 transition-colors group-hover:text-indigo-600">{r.title}</p>
-                      <p className="mt-0.5 text-[12px] text-slate-400">{r.category} · {r.servings} servings</p>
+                      <p className="mt-0.5 text-[12px] text-slate-400">{catsOf(r).join(" · ")} · {r.servings} servings</p>
                     </button>
                     <button
                       type="button"

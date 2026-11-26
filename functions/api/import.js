@@ -42,6 +42,7 @@ const RECIPE_TOOL = {
           properties: {
             title: { type: "string" },
             category: { type: "string", enum: CATEGORIES },
+            extra_categories: { type: "array", items: { type: "string", enum: CATEGORIES }, description: "Other categories it also clearly belongs to (usually 0-2)." },
             servings: { type: "integer", minimum: 1 },
             ingredients: { type: "array", items: { type: "string" } },
             instructions: { type: "array", items: { type: "string" } },
@@ -71,7 +72,7 @@ Faithfulness
 
 Title: the dish name in Title Case, without site names or words like "Best Ever" or "Easy".
 
-Category: the single best fit from the list.
+Category: the single best fit from the list. extra_categories: any other categories it clearly also belongs to (a French onion meatloaf is Mains and also Meats; a clam chowder is Soups & Stews and also Fish & Seafood). Usually 0-2; don't pad.
 
 Servings: an integer. Use the lower number of a range. If not stated, estimate sensibly from the quantities.
 
@@ -96,7 +97,7 @@ If there is no recipe at all, return an empty recipes array and fill in problem.
 const REFINE_SYSTEM = `You revise one recipe in Doug's List at the user's request. Change only what the request asks for (and anything that must change with it, such as amounts when scaling servings or steps when changing technique). Keep every formatting rule:
 - Ingredients: quantity first, digits, fractions like 1/2 or decimals like 1.5, no ½ characters, no heading lines.
 - Instructions: one step per item, no numbering, times written with digits plus minutes/hours.
-- Category must be one of the allowed values.
+- Category must be one of the allowed values; keep the recipe's existing extra_categories unless the change affects them.
 Answer by calling save_recipes with exactly one recipe.`;
 
 // What the AI should know about how this household cooks. Edit freely.
@@ -118,7 +119,7 @@ ${HOUSEHOLD}
 Use the exact same formatting rules as imported recipes:
 - Ingredients: quantity first, digits, fractions like 1/2 or decimals like 1.5, no ½ characters, no heading lines.
 - Instructions: one step per item, no numbering, times written with digits plus minutes/hours, temperatures in °F.
-- Category from the allowed list. Notes: one or two genuinely useful tips (cast iron tips where relevant). Storage: how long it keeps and how to reheat.
+- Category from the allowed list, plus extra_categories it also clearly fits. Notes: one or two genuinely useful tips (cast iron tips where relevant). Storage: how long it keeps and how to reheat.
 - summary: one sentence on why it fits the request.
 Answer by calling save_recipes.`;
 
@@ -212,7 +213,8 @@ const describeStores = (stores) =>
 
 const RECIPE_FIELDS = {
   title: { type: "string" },
-  category: { type: "string", enum: CATEGORIES },
+  category: { type: "string", enum: CATEGORIES, description: "Main category." },
+  extra_categories: { type: "array", items: { type: "string", enum: CATEGORIES }, description: "Other categories it also belongs to (it then shows under each)." },
   servings: { type: "integer", minimum: 1, description: "The servings the ingredient amounts are written for." },
   ingredients: { type: "array", items: { type: "string" }, description: "Quantity first, digits, 1/2 or 1.5 (no ½), no heading lines." },
   instructions: { type: "array", items: { type: "string" }, description: "One step per item, no numbering, times as digits + minutes/hours." },
@@ -421,6 +423,8 @@ function clean(result) {
     .map((r) => ({
       title: String(r.title || "Untitled Recipe").trim(),
       category: CATEGORIES.includes(r.category) ? r.category : "Other",
+      categories: [...new Set([CATEGORIES.includes(r.category) ? r.category : "Other", ...(Array.isArray(r.extra_categories) ? r.extra_categories : [])])]
+        .filter((c) => CATEGORIES.includes(c)),
       servings: Math.max(1, parseInt(r.servings) || 4),
       ingredients: (r.ingredients || []).map((s) => String(s).replace(/^[-*•]\s*/, "").trim()).filter(Boolean),
       instructions: (r.instructions || []).map((s) => String(s).replace(/^\d+[.)]\s*/, "").trim()).filter(Boolean),
