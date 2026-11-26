@@ -2268,7 +2268,7 @@ function StarRating({ value = 0, onChange, size = 18 }) {
 }
 
 /** "This week" dinners card: uncheck a meal to swap it for another. */
-function WeekPlanCard({ plan, settings, busy, error, getRecipe, onOpen, onSwap, onReplan, onSettings, recipes = [], onAdd }) {
+function WeekPlanCard({ plan, settings, busy, error, getRecipe, onOpen, onSwap, onReplan, onSettings, recipes = [], onAdd, onFav }) {
   const [showSettings, setShowSettings] = useState(false);
   const [ask, setAsk] = useState("");
   const [adding, setAdding] = useState(false);
@@ -2332,6 +2332,13 @@ function WeekPlanCard({ plan, settings, busy, error, getRecipe, onOpen, onSwap, 
                   <span className="truncate">{swapping ? "Finding something else…" : m.mine ? "uncheck to remove" : m.reason}</span>
                 </div>
               </button>
+              {onFav && r && (
+                <button type="button" onClick={(e) => onFav(m.id, e)}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-all hover:bg-slate-100 active:scale-90"
+                  title={r.favorite ? "Remove from favorites" : "Save as a favorite"}>
+                  <Star size={17} className={r.favorite ? "fill-indigo-600 text-indigo-600" : "text-slate-300 hover:text-slate-400"} />
+                </button>
+              )}
             </div>
           );
         })}
@@ -5092,6 +5099,7 @@ function AppMain() {
                 plan={thisWeek}
                 recipes={recipes}
                 onAdd={addToWeek}
+                onFav={toggleFav}
                 settings={planSettings}
                 busy={planBusy}
                 error={planError}
