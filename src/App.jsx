@@ -1876,8 +1876,13 @@ function IdeasSheet({ existingTitles, onAdd, onOpen, onClose }) {
   const update = (i, patch) => setResults((cur) => cur.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const add = async (i) => {
     const r = results[i].recipe;
-    const id = await onAdd({ ...r, baseServings: r.servings });
-    update(i, { added: id });
+    setError(null);
+    try {
+      const id = await onAdd({ ...r, baseServings: r.servings });
+      update(i, { added: id });
+    } catch (e) {
+      setError("Couldn't save \u201c" + r.title + "\u201d: " + (e.message || e));
+    }
   };
 
   const chips = ["Weeknight cast iron dinners", "High-protein, low-glycemic", "Soups for cold nights", "Something with fish", "Sunday comfort food"];
@@ -1957,7 +1962,7 @@ function IdeasSheet({ existingTitles, onAdd, onOpen, onClose }) {
               <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-2.5">
                 {added ? (
                   <>
-                    <span className="flex items-center gap-1 text-[13px] font-semibold text-emerald-600"><Check size={14} /> Added</span>
+                    <span className="flex items-center gap-1 text-[13px] font-semibold text-emerald-600"><Check size={14} /> Added as “{r.title}”</span>
                     <button type="button" onClick={() => onOpen(added)} className={BTN_GHOST}>Open</button>
                   </>
                 ) : (
