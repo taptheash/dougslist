@@ -3814,6 +3814,44 @@ function AppMain() {
                   />
                 </div>
 
+                {(() => {
+                  const onList = checkedIds.has(selected.id);
+                  const r0 = selected.servings / selected.baseServings;
+                  const staples = selected.ingredients
+                    .map((ing) => toShoppingText(r0 !== 1 ? scaleIngredient(ing, r0) : ing))
+                    .filter((t) => isPantryStaple(t, pantry));
+                  const n = selected.ingredients.length - staples.length;
+                  return (
+                    <div className={cx(
+                      "mb-3 flex items-center gap-3 rounded-2xl px-4 py-3 ring-1",
+                      onList ? "bg-emerald-50 ring-emerald-100" : "bg-white ring-slate-200"
+                    )}>
+                      <div className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-xl", onList ? "bg-emerald-500 text-white" : "bg-indigo-50 text-indigo-600")}>
+                        {onList ? <Check size={17} strokeWidth={3} /> : <ShoppingCart size={17} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[14px] font-semibold text-slate-900">
+                          {onList ? "On your Market Basket list" : "Add to Market Basket list"}
+                        </div>
+                        <div className="truncate text-[12px] text-slate-500">
+                          {n} item{n !== 1 ? "s" : ""} for {selected.servings} servings
+                          {staples.length > 0 && " · skipping " + staples.length + " pantry staple" + (staples.length !== 1 ? "s" : "")}
+                        </div>
+                      </div>
+                      {onList ? (
+                        <div className="flex shrink-0 gap-1.5">
+                          <button type="button" onClick={() => { setView("shopping"); setStoreTab("mb"); setSelectedId(null); }} className={BTN_GHOST}>View list</button>
+                          <button type="button" onClick={() => setRecipeOnList(selected.id, false)} className={BTN_GHOST}>Remove</button>
+                        </div>
+                      ) : (
+                        <button type="button" onClick={() => setRecipeOnList(selected.id, true)} className={cx(BTN_PRIMARY, "flex shrink-0 items-center gap-1")}>
+                          <Plus size={14} strokeWidth={2.75} /> Add
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <button
                   type="button"
                   onClick={() => setAskOpen(true)}
