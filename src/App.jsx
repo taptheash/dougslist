@@ -667,6 +667,9 @@ function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, 
                 </span>
               )}
 
+            </button>
+          )}
+
           {onPrices && (
             <button type="button" onClick={() => { onPrices(); onClose(); }} className={row(pricesActive)}>
               <span className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-lg transition-transform duration-150 group-hover:scale-105", pricesActive ? "bg-emerald-50" : "bg-slate-200/70")}>
@@ -675,8 +678,6 @@ function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, 
               <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", pricesActive ? "font-semibold text-slate-900" : "font-medium text-slate-600")}>
                 Prices
               </span>
-            </button>
-          )}
             </button>
           )}
         </nav>
