@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useSyncExternalStore } from "reac
 import { auth, db } from "./firebase";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import {
-  collection, doc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch
+  collection, doc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch, deleteField
 } from "firebase/firestore";
 import {
   APP_NAME,
@@ -804,6 +804,74 @@ function StepTimer({ id, seconds, label, stepText, recipeId }) {
       </span>
       {t && <RotateCcw size={11} className="opacity-60" onClick={reset} />}
     </button>
+  );
+}
+
+/** A step's timer plus an editor: change the time for this cook, or save it to the recipe. */
+function StepTimerWithEdit({ id, seconds, detected, saved, label, stepText, recipeId, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [mins, setMins] = useState("");
+  const [secs, setSecs] = useState("");
+  const timers = useTimers();
+  const busy = !!timers[id];
+
+  const open = () => {
+    const base = seconds || 300;
+    setMins(String(Math.floor(base / 60)));
+    setSecs(base % 60 ? String(base % 60) : "");
+    setEditing(true);
+  };
+  const value = () => Math.max(1, (parseInt(mins) || 0) * 60 + (parseInt(secs) || 0));
+  const startNow = () => {
+    timerStore.clear(id);
+    timerStore.start(id, { total: value(), label, step: stepText, recipeId });
+    setEditing(false);
+  };
+  const save = async () => { await onSave(value()); setEditing(false); };
+  const reset = async () => { await onSave(null); setEditing(false); };
+
+  if (editing) {
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-2 ring-1 ring-slate-200">
+        <input type="number" min={0} value={mins} onChange={(e) => setMins(e.target.value)} aria-label="Minutes"
+          className="w-16 rounded-lg bg-white px-2 py-1.5 text-center text-[14px] tabular-nums ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        <span className="text-[12px] text-slate-500">min</span>
+        <input type="number" min={0} max={59} value={secs} onChange={(e) => setSecs(e.target.value)} aria-label="Seconds" placeholder="0"
+          className="w-14 rounded-lg bg-white px-2 py-1.5 text-center text-[14px] tabular-nums ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        <span className="text-[12px] text-slate-500">sec</span>
+        <div className="flex flex-wrap gap-1.5">
+          <button type="button" onClick={startNow} className="rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100">Start now</button>
+          <button type="button" onClick={save} className="rounded-full bg-indigo-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-indigo-700">Save to recipe</button>
+          {saved != null && (
+            <button type="button" onClick={reset} className="rounded-full px-2 py-1.5 text-[12px] font-medium text-slate-500 hover:text-slate-800"
+              title={detected ? "Go back to the time in the step text" : "Remove this timer"}>
+              {detected ? "Reset" : "Remove"}
+            </button>
+          )}
+          <button type="button" onClick={() => setEditing(false)} className="rounded-full px-2 py-1.5 text-[12px] font-medium text-slate-400 hover:text-slate-700">Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!seconds) {
+    return (
+      <button type="button" onClick={open} className="mt-1.5 text-[12px] font-medium text-slate-400 hover:text-indigo-600">
+        + Add timer
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <StepTimer id={id} seconds={seconds} label={label} stepText={stepText} recipeId={recipeId} />
+      {!busy && (
+        <button type="button" onClick={open} title="Change this timer" className="mt-2 grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+          <Pencil size={12} />
+        </button>
+      )}
+      {saved != null && !busy && <span className="mt-2 text-[11px] text-slate-400">your time</span>}
+    </div>
   );
 }
 
@@ -3487,6 +3555,50 @@ function AppMain() {
   const selected = recipes.find((r) => r.id === selectedId);
 
   /* ── Shared chrome ─────────────────────────────────────────────────────── */
+  /* ── One-time category pass: recipes saved before multiple categories existed
+     get their extra categories from the AI (e.g. a meatloaf also under Meats). ── */
+  const categorizingRef = useRef(false);
+  const [catPass, setCatPass] = useState(null); // null | { done, total }
+  useEffect(() => {
+    if (loading || categorizingRef.current) return;
+    const todo = recipes.filter((r) => !Array.isArray(r.categories));
+    if (!todo.length) return;
+    categorizingRef.current = true;
+    (async () => {
+      let failed = false;
+      setCatPass({ done: 0, total: todo.length });
+      for (let i = 0; i < todo.length; i += 25) {
+        const chunk = todo.slice(i, i + 25);
+        try {
+          const res = await fetch("/api/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "categorize",
+              recipes: chunk.map((r) => ({ id: r.id, title: r.title, category: catsOf(r)[0], ingredients: r.ingredients })),
+            }),
+          });
+          if (!res.ok) { failed = true; break; } // try again next time the app opens
+          const { results = [] } = await res.json();
+          const extra = Object.fromEntries(results.map((x) => [x.id, x.extra]));
+          const batch = writeBatch(db);
+          chunk.forEach((r) => {
+            const cats = catsOf({ category: catsOf(r)[0], categories: extra[r.id] || [] });
+            batch.update(doc(db, "recipes", r.id), { categories: cats, category: cats[0] });
+          });
+          await batch.commit();
+          setCatPass({ done: Math.min(todo.length, i + 25), total: todo.length });
+        } catch (e) {
+          console.error("category pass failed:", e);
+          failed = true;
+          break;
+        }
+      }
+      setTimeout(() => setCatPass(null), 2500);
+      if (!failed) categorizingRef.current = false; // on failure, wait until the app is reopened
+    })();
+  }, [loading, recipes]);
+
   /* ── Assistant: the agent loop. The worker decides; these functions act. ── */
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [agentMsgs, setAgentMsgs] = useState([]);
@@ -3978,7 +4090,9 @@ function AppMain() {
                     <h2 className={cx(LABEL_SM, "mb-2 border-b border-slate-200 pb-2 text-indigo-500")}>Instructions</h2>
                     <ol>
                       {selected.instructions.map((step, i) => {
-                        const secs = extractTimerSeconds(step);
+                        const detected = extractTimerSeconds(step);
+                        const saved = selected.timers?.[i] ?? null;
+                        const secs = saved || detected;
                         return (
                           <li key={i} className="flex gap-3 border-b border-slate-100 py-3 last:border-0">
                             <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
@@ -3986,7 +4100,16 @@ function AppMain() {
                             </span>
                             <div className="min-w-0 flex-1">
                               <p className="text-[14.5px] leading-relaxed text-slate-700">{step}</p>
-                              {secs && <StepTimer id={selected.id + "-" + i} seconds={secs} label={selected.title} stepText={step} recipeId={selected.id} />}
+                              <StepTimerWithEdit
+                                id={selected.id + "-" + i}
+                                seconds={secs}
+                                detected={detected}
+                                saved={saved}
+                                label={selected.title}
+                                stepText={step}
+                                recipeId={selected.id}
+                                onSave={(v) => updateDoc(doc(db, "recipes", selected.id), { ["timers." + i]: v == null ? deleteField() : v })}
+                              />
                             </div>
                           </li>
                         );
@@ -4115,6 +4238,14 @@ function AppMain() {
 
           <main className="mx-auto max-w-2xl px-4 pb-16 pt-3">
 
+            {catPass && (
+              <p className="mb-2 flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-2 text-[12.5px] text-indigo-800 ring-1 ring-indigo-100">
+                {catPass.done < catPass.total ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                {catPass.done < catPass.total
+                  ? "Sorting your recipes into extra categories… " + catPass.done + "/" + catPass.total
+                  : "Done — recipes now show under every category that fits."}
+              </p>
+            )}
             {searchWords.length > 0 && (
               <p className="mb-2 px-1 text-[12.5px] text-slate-500">
                 {filtered.length} recipe{filtered.length !== 1 ? "s" : ""} match “{search.trim()}” across all categories

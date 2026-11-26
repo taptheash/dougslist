@@ -522,6 +522,32 @@ export async function onRequestPost({ request, env }) {
       return json({ content: data.content || [], stop_reason: data.stop_reason });
     }
 
+    // ── One-time: give older recipes their extra categories ───────────────
+    if (body.mode === "categorize") {
+      const list = (Array.isArray(body.recipes) ? body.recipes : []).slice(0, 30).map((r) => ({
+        id: String(r.id), title: String(r.title || "").slice(0, 120), category: r.category,
+        ingredients: (r.ingredients || []).slice(0, 12).map((x) => String(x).slice(0, 80)),
+      }));
+      if (!list.length) return json({ results: [] });
+      const out = await callTool(env, {
+        system: `You sort recipes into categories for a household recipe app. Allowed categories: ${CATEGORIES.join(", ")}. Each recipe already has a main category. For each, list any OTHER allowed categories it clearly also belongs to, so it also shows up under those tabs. Guidance: a dish built around beef, pork, chicken, turkey, lamb or sausage also belongs in "Meats"; built around fish or shellfish, also "Fish & Seafood"; a vegetable-led side or main, also "Vegetables"; a main-course soup or stew, also "Mains" only if it's a full meal; pasta dishes also "Italian" when they're Italian. A minor ingredient (a little bacon or salt pork for flavor) doesn't count. Don't repeat the main category; return an empty list when nothing else clearly fits.`,
+        tool: {
+          name: "set_categories",
+          description: "Extra categories for each recipe.",
+          input_schema: { type: "object", properties: { results: { type: "array", items: { type: "object",
+            properties: { id: { type: "string" }, extra_categories: { type: "array", items: { type: "string", enum: CATEGORIES } } },
+            required: ["id", "extra_categories"] } } }, required: ["results"] },
+        },
+        content: JSON.stringify(list),
+        maxTokens: 3000,
+      });
+      const ids = new Set(list.map((r) => r.id));
+      const results = (out?.results || [])
+        .filter((r) => ids.has(String(r.id)))
+        .map((r) => ({ id: String(r.id), extra: (r.extra_categories || []).filter((c) => CATEGORIES.includes(c)) }));
+      return json({ results });
+    }
+
     // ── Question about a recipe (chat) ────────────────────────────────────
     if (body.mode === "ask") {
       const history = (Array.isArray(body.messages) ? body.messages : [])
