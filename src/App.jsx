@@ -18,7 +18,8 @@ import {
   Soup, Milk, Salad, Egg, Fish, Shirt, Home as HomeIcon, Zap, Gamepad2, Layers, Wrench, DoorOpen,
   Paintbrush, Leaf, TreePine, Wind, X, Pencil, Check, Sun, Star, FileText, Camera, Link2,
   AlertTriangle, ChevronLeft, ChevronRight, Search, ArrowUpDown, BookOpen, Download,
-  MoreVertical, RotateCcw, Plus, Minus, Menu, Store, ShoppingBag, Trash2, MapPin
+  MoreVertical, RotateCcw, Plus, Minus, Menu, Store, ShoppingBag, Trash2, MapPin,
+  Image as ImageIcon, Loader2
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1251,6 +1252,293 @@ function StoreEditorModal({ store, onSave, onDelete, onClose }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   7b. Recipe import — one box for anything, then review before saving
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Shrink a photo to a sensible size and return { base64, mediaType, preview }. */
+const prepareImage = (file) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1600;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      URL.revokeObjectURL(url);
+      resolve({ base64: dataUrl.split(",")[1], mediaType: "image/jpeg", preview: dataUrl });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Couldn't read that image.")); };
+    img.src = url;
+  });
+
+/** Recipe object ⇄ editable draft (lists become one-per-line text). */
+const toDraft = (r) => ({
+  title: r.title || "", category: r.category || "Other", servings: r.servings || 4,
+  ingredients: (r.ingredients || []).join("\n"), instructions: (r.instructions || []).join("\n"),
+  notes: r.notes || "", storage: r.storage || "",
+});
+const fromDraft = (d) => {
+  const servings = Math.max(1, parseInt(d.servings) || 4);
+  return {
+    title: d.title.trim() || "Untitled Recipe",
+    category: CATEGORIES.includes(d.category) ? d.category : "Other",
+    servings, baseServings: servings,
+    ingredients: d.ingredients.split("\n").map((l) => l.replace(/^[-*•]\s*/, "").trim()).filter(Boolean),
+    instructions: d.instructions.split("\n").map((l) => l.replace(/^\d+[.)]\s*/, "").trim()).filter(Boolean),
+    notes: d.notes.trim(), storage: d.storage.trim(),
+  };
+};
+
+const postImport = async (payload) => {
+  const res = await fetch("/api/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  let data = {};
+  try { data = await res.json(); } catch { /* non-JSON error page */ }
+  if (!res.ok) throw new Error(data.error || "Import failed (" + res.status + ")");
+  return data.recipes || [];
+};
+
+function ImportSheet({ onClose, onSave }) {
+  const [stage, setStage] = useState("input");      // input | working | review
+  const [text, setText] = useState("");
+  const [images, setImages] = useState([]);         // [{ base64, mediaType, preview }]
+  const [error, setError] = useState(null);
+  const [drafts, setDrafts] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const cameraRef = useRef(null);
+  const libraryRef = useRef(null);
+
+  const isLink = /^https?:\/\/\S+$/i.test(text.trim());
+  const canGo = text.trim() || images.length;
+
+  const addFiles = async (files) => {
+    const list = Array.from(files || []).filter((f) => f.type.startsWith("image/"));
+    if (!list.length) return;
+    setError(null);
+    try {
+      const prepared = await Promise.all(list.map(prepareImage));
+      setImages((cur) => [...cur, ...prepared].slice(0, 8));
+    } catch (e) { setError(e.message); }
+  };
+
+  const onPaste = (e) => {
+    const files = Array.from(e.clipboardData?.files || []);
+    if (files.some((f) => f.type.startsWith("image/"))) { e.preventDefault(); addFiles(files); }
+  };
+
+  const run = async () => {
+    if (!canGo) return;
+    setStage("working"); setError(null);
+    try {
+      const recipes = await postImport({ text: text.trim(), images: images.map(({ base64, mediaType }) => ({ base64, mediaType })) });
+      if (!recipes.length) throw new Error("No recipe found in that.");
+      setDrafts(recipes.map(toDraft));
+      setStage("review");
+    } catch (e) {
+      // Offline / service down: if the pasted text is already in the classic format, use it as-is.
+      const local = !images.length && !isLink ? parseRecipes(text) : [];
+      if (local.length) { setDrafts(local.map(toDraft)); setStage("review"); return; }
+      setError(e.message || "Something went wrong.");
+      setStage("input");
+    }
+  };
+
+  const save = async () => {
+    setSaving(true); setError(null);
+    try { await onSave(drafts.map(fromDraft)); }
+    catch (e) { setError(e.message || "Couldn't save."); setSaving(false); }
+  };
+
+  const busy = stage === "working";
+  const title = stage === "review" ? (drafts.length > 1 ? "Review " + drafts.length + " recipes" : "Review recipe") : "Add a recipe";
+  const subtitle = stage === "review" ? "Check it over, ask for changes, then save" : "Paste anything, drop a link, or snap a photo";
+
+  return (
+    <Sheet title={title} subtitle={subtitle} onClose={busy || saving ? () => {} : onClose} wide>
+      {stage !== "review" && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
+          className={cx("rounded-2xl transition-shadow", dragOver && "ring-2 ring-indigo-400")}
+        >
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onPaste={onPaste}
+            disabled={busy}
+            autoFocus={!isMobile}
+            placeholder={"Paste a recipe in any format — from a website, an email, a text, your notes…\n\nOr paste a link to a recipe page."}
+            className="h-44 w-full resize-y rounded-2xl bg-slate-50 p-3.5 text-[14px] leading-relaxed text-slate-900 ring-1 ring-slate-200 transition-shadow placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+          />
+
+          {images.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {images.map((img, i) => (
+                <div key={i} className="relative">
+                  <img src={img.preview} alt={"Photo " + (i + 1)} className="h-20 w-20 rounded-xl object-cover ring-1 ring-slate-200" />
+                  {!busy && (
+                    <button
+                      type="button"
+                      onClick={() => setImages((cur) => cur.filter((_, j) => j !== i))}
+                      className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-slate-900 text-white shadow"
+                      aria-label="Remove photo"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+          <input ref={libraryRef} type="file" accept="image/*" multiple className="hidden"
+            onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {isMobile && (
+              <button type="button" disabled={busy} onClick={() => cameraRef.current?.click()} className={cx(BTN_GHOST, "flex items-center gap-1.5")}>
+                <Camera size={14} /> Camera
+              </button>
+            )}
+            <button type="button" disabled={busy} onClick={() => libraryRef.current?.click()} className={cx(BTN_GHOST, "flex items-center gap-1.5")}>
+              <ImageIcon size={14} /> {isMobile ? "Photos" : "Add photos"}
+            </button>
+            <div className="flex-1" />
+            <button type="button" disabled={!canGo || busy} onClick={run} className={cx(BTN_PRIMARY, "flex items-center gap-1.5")}>
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {busy ? "Working…" : "Format it"}
+            </button>
+          </div>
+
+          <p className="mt-2 text-[12px] text-slate-400">
+            {busy
+              ? (isLink ? "Reading the page…" : images.length ? "Reading your photo" + (images.length > 1 ? "s" : "") + "… (10–20 seconds)" : "Tidying it up…")
+              : isLink ? "Link detected — the recipe will be pulled from the page."
+              : !isMobile ? "Tip: you can paste or drag a screenshot straight in. Multiple photos = pages of one recipe." : "Multiple photos are treated as pages of one recipe."}
+          </p>
+        </div>
+      )}
+
+      {stage === "review" && (
+        <div className="flex flex-col gap-4">
+          {drafts.map((d, i) => (
+            <DraftEditor
+              key={i}
+              draft={d}
+              onChange={(nd) => setDrafts((cur) => cur.map((x, j) => (j === i ? nd : x)))}
+              onRemove={drafts.length > 1 ? () => setDrafts((cur) => cur.filter((_, j) => j !== i)) : null}
+            />
+          ))}
+          <div className="flex justify-end gap-2">
+            <button type="button" disabled={saving} onClick={() => { setStage("input"); setError(null); }} className={BTN_GHOST}>Back</button>
+            <button type="button" disabled={saving || !drafts.length} onClick={save} className={cx(BTN_PRIMARY, "flex items-center gap-1.5")}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {drafts.length > 1 ? "Save all" : "Save recipe"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-red-50 p-3 text-[13px] text-red-700">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {error}
+        </p>
+      )}
+    </Sheet>
+  );
+}
+
+/** One recipe in the review step: editable fields plus "ask for a change". */
+function DraftEditor({ draft, onChange, onRemove }) {
+  const [ask, setAsk] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState(null);
+  const set = (k) => (e) => onChange({ ...draft, [k]: e.target.value });
+  const ingCount = draft.ingredients.split("\n").filter((l) => l.trim()).length;
+  const stepCount = draft.instructions.split("\n").filter((l) => l.trim()).length;
+
+  const refine = async () => {
+    if (!ask.trim()) return;
+    setAsking(true); setAskError(null);
+    try {
+      const [r] = await postImport({ mode: "refine", recipe: fromDraft(draft), instruction: ask.trim() });
+      if (r) { onChange(toDraft(r)); setAsk(""); }
+    } catch (e) { setAskError(e.message); }
+    setAsking(false);
+  };
+
+  return (
+    <div className={cx(CARD, "p-4")}>
+      <div className="flex items-start gap-2">
+        <input value={draft.title} onChange={set("title")} className={cx(INPUT, "text-[16px] font-semibold")} aria-label="Title" />
+        {onRemove && <IconBtn icon={Trash2} title="Don't import this one" onClick={onRemove} />}
+      </div>
+
+      <div className="mt-3 grid grid-cols-[1fr_6rem] gap-2">
+        <Field label="Category">
+          <select value={draft.category} onChange={set("category")} className={INPUT}>
+            {CATEGORIES.filter((c) => c !== "All" && c !== "Favorites").map((c) => <option key={c}>{c}</option>)}
+          </select>
+        </Field>
+        <Field label="Serves">
+          <input type="number" min="1" value={draft.servings} onChange={set("servings")} className={INPUT} />
+        </Field>
+      </div>
+
+      <div>
+        <Field label={"Ingredients (" + ingCount + ")"} hint="One per line">
+          <textarea value={draft.ingredients} onChange={set("ingredients")} className={cx(INPUT, "h-40 resize-y text-[13.5px] leading-relaxed")} />
+        </Field>
+      </div>
+      <div>
+        <Field label={"Steps (" + stepCount + ")"} hint="One per line">
+          <textarea value={draft.instructions} onChange={set("instructions")} className={cx(INPUT, "h-48 resize-y text-[13.5px] leading-relaxed")} />
+        </Field>
+      </div>
+      <div className="grid gap-x-3 md:grid-cols-2">
+        <Field label="Notes">
+          <textarea value={draft.notes} onChange={set("notes")} className={cx(INPUT, "h-20 resize-y text-[13px] leading-relaxed")} />
+        </Field>
+        <Field label="Storage">
+          <textarea value={draft.storage} onChange={set("storage")} className={cx(INPUT, "h-20 resize-y text-[13px] leading-relaxed")} />
+        </Field>
+      </div>
+
+      <div className="rounded-xl bg-indigo-50/60 p-3 ring-1 ring-indigo-100">
+        <div className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-indigo-700">
+          <Sparkles size={13} /> Ask for a change
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={ask}
+            onChange={(e) => setAsk(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && refine()}
+            disabled={asking}
+            placeholder="e.g. make it serve 2 · adapt for cast iron · lower-glycemic swaps"
+            className={cx(INPUT, "text-[13.5px]")}
+          />
+          <button type="button" disabled={!ask.trim() || asking} onClick={refine} className={cx(BTN_PRIMARY, "shrink-0")}>
+            {asking ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+          </button>
+        </div>
+        {askError && <p className="mt-2 text-[12px] text-red-600">{askError}</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    8. App
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -1268,16 +1556,6 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
 
   const [importOpen, setImportOpen] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [importText, setImportText] = useState("");
-  const [showPhotoImport, setShowPhotoImport] = useState(false);
-  const [photoImporting, setPhotoImporting] = useState(false);
-  const [photoError, setPhotoError] = useState(null);
-  const [showUrlImport, setShowUrlImport] = useState(false);
-  const [urlImportValue, setUrlImportValue] = useState("");
-  const [urlImporting, setUrlImporting] = useState(false);
-  const [urlImportError, setUrlImportError] = useState(null);
-  const photoInputRef = useRef(null);
 
   const [editingRecipeId, setEditingRecipeId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
@@ -1963,77 +2241,27 @@ export default function App() {
     }
   };
 
+  /** Save imported recipes; returns the new document ids. */
   const saveRecipesToFirestore = async (nr) => {
     const batch = writeBatch(db);
-    nr.forEach((r, i) => {
-      const id = "recipe_" + Date.now() + "_" + i;
+    const stamp = Date.now();
+    const ids = nr.map((r, i) => {
+      const id = "recipe_" + stamp + "_" + i;
       batch.set(doc(db, "recipes", id), {
         title: r.title, category: r.category, baseServings: r.baseServings, servings: r.servings,
-        ingredients: r.ingredients, instructions: r.instructions, favorite: false, notes: "", storage: "",
+        ingredients: r.ingredients, instructions: r.instructions, favorite: false,
+        notes: r.notes || "", storage: r.storage || "",
       });
+      return id;
     });
     await batch.commit();
+    return ids;
   };
 
-  const handleImport = async () => {
-    if (!importText.trim()) return;
-    const nr = parseRecipes(importText);
-    if (nr.length) { await saveRecipesToFirestore(nr); setImportText(""); setShowImport(false); setImportOpen(false); }
-  };
-
-  const handlePhotoImport = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPhotoImporting(true); setPhotoError(null); setShowPhotoImport(true);
-    try {
-      const base64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result.split(",")[1]);
-        r.onerror = () => rej(new Error("Failed to read file"));
-        r.readAsDataURL(file);
-      });
-      const mediaType = file.type || "image/jpeg";
-      const response = await fetch("/api/import-photo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64, mediaType }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "API error: " + response.status);
-      const recipeText = data.recipeText;
-      if (!recipeText) throw new Error("No recipe text returned");
-      const nr = parseRecipes(recipeText);
-      if (!nr.length) throw new Error("Could not parse recipe from image");
-      await saveRecipesToFirestore(nr);
-      setShowPhotoImport(false); setPhotoImporting(false); setImportOpen(false);
-      if (photoInputRef.current) photoInputRef.current.value = "";
-    } catch (err) {
-      setPhotoError(err.message || "Something went wrong.");
-      setPhotoImporting(false);
-    }
-  };
-
-  const handleUrlImport = async () => {
-    if (!urlImportValue.trim()) return;
-    setUrlImporting(true); setUrlImportError(null);
-    try {
-      const response = await fetch("/api/import-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: urlImportValue.trim() }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "API error: " + response.status);
-      const recipeText = data.recipeText;
-      if (!recipeText) throw new Error("No recipe text returned");
-      const nr = parseRecipes(recipeText);
-      if (!nr.length) throw new Error("Could not parse a recipe from that URL. Try the text import instead.");
-      await saveRecipesToFirestore(nr);
-      setShowUrlImport(false); setUrlImportValue(""); setUrlImporting(false); setImportOpen(false);
-    } catch (err) {
-      setUrlImportError(err.message || "Something went wrong.");
-      setUrlImporting(false);
-    }
+  const handleImportSave = async (nr) => {
+    const ids = await saveRecipesToFirestore(nr);
+    setImportOpen(false);
+    if (ids.length === 1) setSelectedId(ids[0]);
   };
 
   const startEditRecipe = (r) => {
@@ -2346,136 +2574,7 @@ export default function App() {
         {nav}
         {storeEditorEl}
 
-        {importOpen && (
-          <Sheet title="Import a recipe" subtitle="Paste it, shoot it, or link it" onClose={() => setImportOpen(false)} wide>
-            <div className="flex flex-col gap-2.5">
-              {/* Paste text */}
-              <div className={cx(CARD, "overflow-hidden")}>
-                <button
-                  type="button"
-                  onClick={() => setShowImport((v) => !v)}
-                  className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-slate-50"
-                >
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50">
-                    <FileText size={18} className="text-indigo-600" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[14.5px] font-semibold text-slate-900">Paste text</div>
-                    <div className="mt-0.5 text-[12px] text-slate-400">Copy &amp; paste from anywhere</div>
-                  </div>
-                  <ChevronRight size={16} className={cx("shrink-0 text-slate-300 transition-transform duration-200", showImport && "rotate-90")} />
-                </button>
-                {showImport && (
-                  <div className="animate-rise px-4 pb-4">
-                    <textarea
-                      value={importText}
-                      onChange={(e) => setImportText(e.target.value)}
-                      placeholder={"Recipe Title\nCategory: Mains\nServings: 4\nIngredients:\n- ingredient\nInstructions:\n1. Step one"}
-                      className="h-40 w-full resize-y rounded-xl bg-slate-50 p-3 text-[13px] leading-relaxed text-slate-900 ring-1 ring-slate-200 transition-shadow placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <div className="mt-3 flex justify-end gap-2">
-                      <button type="button" onClick={() => { setShowImport(false); setImportText(""); }} className={BTN_GHOST}>Clear</button>
-                      <button type="button" onClick={handleImport} className={BTN_PRIMARY}>Save recipe</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Photo (mobile only) */}
-              {isMobile && (
-                <>
-                  <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoImport} className="hidden" />
-                  <div className={cx(CARD, "overflow-hidden")}>
-                    <button
-                      type="button"
-                      onClick={() => photoInputRef.current?.click()}
-                      className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-slate-50"
-                    >
-                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50">
-                        <Camera size={18} className="text-indigo-600" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[14.5px] font-semibold text-slate-900">Photo</div>
-                        <div className="mt-0.5 text-[12px] text-slate-400">Shoot a page or a screenshot</div>
-                      </div>
-                      <ChevronRight size={16} className="shrink-0 text-slate-300" />
-                    </button>
-                    {showPhotoImport && (
-                      <div className="animate-rise px-4 pb-4 text-center">
-                        {photoImporting ? (
-                          <>
-                            <p className="text-[13px] font-medium text-slate-500">Reading recipe from photo…</p>
-                            <p className="mt-1 text-[12px] text-slate-400">This usually takes 5–10 seconds</p>
-                          </>
-                        ) : photoError ? (
-                          <>
-                            <p className="mb-3 flex items-center justify-center gap-1.5 text-[13px] text-red-600">
-                              <AlertTriangle size={14} /> {photoError}
-                            </p>
-                            <button type="button" onClick={() => { setShowPhotoImport(false); setPhotoError(null); }} className={BTN_PRIMARY}>OK</button>
-                          </>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* URL */}
-              <div className={cx(CARD, "overflow-hidden")}>
-                <button
-                  type="button"
-                  onClick={() => setShowUrlImport((v) => !v)}
-                  className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-slate-50"
-                >
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50">
-                    <Link2 size={18} className="text-indigo-600" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[14.5px] font-semibold text-slate-900">URL / link</div>
-                    <div className="mt-0.5 text-[12px] text-slate-400">Pull it off a recipe site</div>
-                  </div>
-                  <ChevronRight size={16} className={cx("shrink-0 text-slate-300 transition-transform duration-200", showUrlImport && "rotate-90")} />
-                </button>
-                {showUrlImport && (
-                  <div className="animate-rise px-4 pb-4">
-                    {urlImporting ? (
-                      <div className="py-2 text-center">
-                        <p className="text-[13px] font-medium text-slate-500">Fetching recipe…</p>
-                        <p className="mt-1 text-[12px] text-slate-400">This usually takes 5–15 seconds</p>
-                      </div>
-                    ) : (
-                      <>
-                        {urlImportError && (
-                          <p className="mb-2 flex items-center gap-1.5 text-[12px] text-red-600">
-                            <AlertTriangle size={13} /> {urlImportError}
-                          </p>
-                        )}
-                        <input
-                          value={urlImportValue}
-                          onChange={(e) => setUrlImportValue(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleUrlImport()}
-                          placeholder="https://example.com/recipes/…"
-                          className="w-full rounded-xl bg-slate-50 px-3 py-2.5 text-[14px] text-slate-900 ring-1 ring-slate-200 transition-shadow placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <div className="mt-3 flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => { setShowUrlImport(false); setUrlImportValue(""); setUrlImportError(null); }}
-                            className={BTN_GHOST}
-                          >
-                            Cancel
-                          </button>
-                          <button type="button" onClick={handleUrlImport} className={BTN_PRIMARY}>Import</button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </Sheet>
-        )}
+        {importOpen && <ImportSheet onClose={() => setImportOpen(false)} onSave={handleImportSave} />}
 
         <div className="md:pl-64">
           <AppHeader
