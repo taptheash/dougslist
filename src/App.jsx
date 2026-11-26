@@ -2391,35 +2391,52 @@ function AiChangeBox({ getRecipe, onApply }) {
   );
 }
 
-/** Pick one or more categories. The first one picked is the main category. */
+/**
+ * Pick one or more categories. The dark chip is the main category.
+ * Tap an unselected chip to add it, tap a selected one to make it the main category,
+ * and tap its × to remove it.
+ */
 function CategoryPicker({ value, onChange }) {
   const cur = catsOf({ categories: value });
-  const toggle = (c) => {
-    if (cur.includes(c)) { if (cur.length > 1) onChange(cur.filter((x) => x !== c)); }
-    else onChange([...cur, c]);
-  };
+  const add = (c) => onChange([...cur, c]);
+  const makeMain = (c) => onChange([c, ...cur.filter((x) => x !== c)]);
+  const remove = (c) => { if (cur.length > 1) onChange(cur.filter((x) => x !== c)); };
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {RECIPE_CATS.map((c) => {
-        const i = cur.indexOf(c);
-        const on = i >= 0;
-        return (
-          <button
-            key={c}
-            type="button"
-            onClick={() => toggle(c)}
-            title={i === 0 ? "Main category" : on ? "Also shows here — tap to remove" : "Also show under " + c}
-            className={cx(
-              "rounded-full px-2.5 py-1 text-[12px] font-medium ring-1 transition-colors",
-              i === 0 ? "bg-indigo-600 text-white ring-indigo-600"
-                : on ? "bg-indigo-50 text-indigo-700 ring-indigo-200"
-                  : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"
-            )}
-          >
-            {on && <Check size={11} strokeWidth={3} className="-ml-0.5 mr-0.5 inline" />}{c}
-          </button>
-        );
-      })}
+    <div>
+      <div className="flex flex-wrap gap-1.5">
+        {RECIPE_CATS.map((c) => {
+          const i = cur.indexOf(c);
+          const on = i >= 0;
+          return (
+            <span
+              key={c}
+              className={cx(
+                "inline-flex items-center rounded-full text-[12px] font-medium ring-1 transition-colors",
+                i === 0 ? "bg-indigo-600 text-white ring-indigo-600"
+                  : on ? "bg-indigo-50 text-indigo-700 ring-indigo-200"
+                    : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => (on ? makeMain(c) : add(c))}
+                title={i === 0 ? "Main category" : on ? "Make this the main category" : "Also show under " + c}
+                className={cx("py-1", on && cur.length > 1 ? "pl-2.5 pr-1" : "px-2.5")}
+              >
+                {i === 0 && cur.length > 1 && <Star size={10} className="-ml-0.5 mr-1 inline fill-current" />}
+                {c}
+              </button>
+              {on && cur.length > 1 && (
+                <button type="button" onClick={() => remove(c)} aria-label={"Remove " + c}
+                  className={cx("mr-1 grid h-4 w-4 place-items-center rounded-full", i === 0 ? "hover:bg-white/20" : "hover:bg-indigo-100")}>
+                  <X size={10} strokeWidth={3} />
+                </button>
+              )}
+            </span>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-[11px] text-slate-400">Tap to add · tap a picked one to make it the main category (★) · × to remove</p>
     </div>
   );
 }
@@ -2438,7 +2455,7 @@ function DraftEditor({ draft, onChange, onRemove }) {
       </div>
 
       <div className="mt-3 grid grid-cols-[1fr_5rem] items-start gap-2">
-        <Field label="Categories" hint="tap to add more">
+        <Field label="Categories">
           <CategoryPicker value={draft.cats} onChange={(cats) => onChange({ ...draft, cats })} />
         </Field>
         <Field label="Serves">
@@ -2503,6 +2520,7 @@ function AppMain() {
 
   const [importOpen, setImportOpen] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
+  const [catEditOpen, setCatEditOpen] = useState(false);
   const [ideasOpen, setIdeasOpen] = useState(false);
   const searchRef = useRef(null);
   useEffect(() => {
@@ -3833,7 +3851,7 @@ function AppMain() {
     const isEditing = editingRecipeId === selected.id;
 
     const closeDetail = () => {
-      setSelectedId(null); cancelEditRecipe(); setConfirmDelete(false); setAskOpen(false);
+      setSelectedId(null); cancelEditRecipe(); setConfirmDelete(false); setAskOpen(false); setCatEditOpen(false);
       if (wakeLock) wakeLock.release();
       setWakeActive(false); setWakeLock(null);
     };
@@ -3921,7 +3939,7 @@ function AppMain() {
                   <input value={editDraft.title} onChange={(e) => setEditDraft((d) => ({ ...d, title: e.target.value }))} className={INPUT} />
                 </Field>
 
-                <Field label="Categories" hint="first is the main one · tap to add more">
+                <Field label="Categories">
                   <CategoryPicker value={editDraft.cats} onChange={(cats) => setEditDraft((d) => ({ ...d, cats }))} />
                 </Field>
 
@@ -4017,10 +4035,25 @@ function AppMain() {
                       <Star size={11} className="fill-amber-400 text-amber-400" /> Favorites
                     </button>
                   )}
-                  <button type="button" onClick={() => startEditRecipe(selected)} className="text-[11.5px] font-medium text-indigo-600 hover:underline">
-                    Edit categories
+                  <button type="button" onClick={() => setCatEditOpen((v) => !v)} className="text-[11.5px] font-medium text-indigo-600 hover:underline">
+                    {catEditOpen ? "Done" : "Change categories"}
                   </button>
                 </div>
+                {catEditOpen && (
+                  <div className={cx(CARD, "mb-3 p-3")}>
+                    <CategoryPicker
+                      value={catsOf(selected)}
+                      onChange={(cats) => {
+                        const c = catsOf({ categories: cats });
+                        setRecipes((rs) => rs.map((r) => (r.id === selected.id ? { ...r, categories: c, category: c[0] } : r)));
+                        updateDoc(doc(db, "recipes", selected.id), { categories: c, category: c[0] });
+                      }}
+                    />
+                    <div className="mt-2 flex justify-end">
+                      <button type="button" onClick={() => setCatEditOpen(false)} className={BTN_GHOST}>Done</button>
+                    </div>
+                  </div>
+                )}
 
                 {(() => {
                   const onList = checkedIds.has(selected.id);
