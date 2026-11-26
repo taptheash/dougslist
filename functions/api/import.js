@@ -220,30 +220,55 @@ async function readPage(url) {
 }
 
 async function callClaude(env, { system, content, tools, forceTool = true, vision = false, messages, maxTokens = 8000 }) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: vision ? (env.IMPORT_MODEL_VISION || MODEL_VISION) : (env.IMPORT_MODEL_FAST || MODEL_FAST),
-      max_tokens: maxTokens,
-      system,
-      ...(tools ? { tools } : {}),
-      ...(tools && forceTool ? { tool_choice: { type: "tool", name: RECIPE_TOOL.name } } : {}),
-      messages: messages || [{ role: "user", content }],
-    }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`AI service error ${res.status}${detail ? ": " + detail.slice(0, 200) : ""}`);
-  }
-  const data = await res.json();
+  const model = vision ? (env.IMPORT_MODEL_VISION || MODEL_VISION) : (env.IMPORT_MODEL_FAST || MODEL_FAST);
+  const post = async (msgs) => {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      // Current models don't allow forcing a specific tool, so the tool is offered
+      // ("auto") and the prompt says to use it; see the fallbacks below.
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system: tools && forceTool ? system + "\n\nAlways respond by calling the save_recipes tool. Do not reply with plain text." : system,
+        ...(tools ? { tools, tool_choice: { type: "auto" } } : {}),
+        messages: msgs,
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(`AI service error ${res.status}${detail ? ": " + detail.slice(0, 200) : ""}`);
+    }
+    return res.json();
+  };
+
+  const msgs = messages || [{ role: "user", content }];
+  let data = await post(msgs);
   if (!tools) return data.content?.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim() || "";
-  const call = data.content?.find((b) => b.type === "tool_use" && b.name === RECIPE_TOOL.name);
-  return call?.input || null;
+
+  const findCall = (d) => d.content?.find((b) => b.type === "tool_use" && b.name === RECIPE_TOOL.name)?.input || null;
+  let call = findCall(data);
+  if (call) return call;
+
+  // Fallback 1: the model wrote the JSON as text.
+  const text = data.content?.filter((b) => b.type === "text").map((b) => b.text).join("\n") || "";
+  const m = text.match(/\{[\s\S]*"recipes"[\s\S]*\}/);
+  if (m) { try { return JSON.parse(m[0]); } catch { /* not valid JSON */ } }
+
+  // Fallback 2: ask once more, explicitly, continuing the same conversation.
+  if (data.stop_reason !== "pause_turn" && text.trim()) {
+    data = await post([
+      ...msgs,
+      { role: "assistant", content: text },
+      { role: "user", content: "Now save that by calling the save_recipes tool." },
+    ]);
+    call = findCall(data);
+  }
+  return call;
 }
 
 /** Make sure every recipe has the exact shape the app stores. */
