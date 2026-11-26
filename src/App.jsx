@@ -534,7 +534,7 @@ function Sheet({ title, subtitle, onClose, children, wide }) {
  * Left navigation. A slide-over drawer below `md`, a permanent sidebar above it.
  * Stores first, then Recipes; Import now lives inside the Recipes screen.
  */
-function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, onAddStore, onRecipes, recipesActive, recipeCount }) {
+function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, onAddStore, onRecipes, recipesActive, recipeCount, onAssistant }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -575,6 +575,19 @@ function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, 
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">
+          {onAssistant && (
+            <button
+              type="button"
+              onClick={() => { onAssistant(); onClose(); }}
+              className="mb-2 mt-1 flex w-full items-center gap-3 rounded-xl bg-indigo-600 px-2.5 py-2.5 text-left text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.98]"
+            >
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/15"><Sparkles size={15} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] font-semibold">Assistant</span>
+                <span className="block truncate text-[11px] text-indigo-100">Plan meals, build lists, find recipes</span>
+              </span>
+            </button>
+          )}
           <p className={cx(LABEL_SM, "px-2.5 pb-1.5 pt-2")}>Stores</p>
 
           {stores.map((store) => {
@@ -2116,6 +2129,124 @@ function IdeasSheet({ existingTitles, onAdd, onOpen, onClose }) {
   );
 }
 
+/* ── Assistant: chat that works the app through tools ── */
+
+/** One-line description of a tool step, shown in the chat as the assistant works. */
+const describeStep = (name, input = {}, recipeTitle, storeName = (x) => x) => {
+  const t = (id) => recipeTitle(id) || "a recipe";
+  switch (name) {
+    case "search_recipes": return "Looked through your recipes" + (input.query ? " for “" + input.query + "”" : input.category ? " in " + input.category : "");
+    case "get_recipe": return "Read " + t(input.id);
+    case "create_recipe": return "Wrote and saved “" + (input.title || "a new recipe") + "”";
+    case "update_recipe": return "Updated " + t(input.id);
+    case "set_servings": return "Scaled " + t(input.id) + " to " + input.servings + " servings";
+    case "add_recipe_to_list": return "Put " + t(input.id) + " on the Market Basket list";
+    case "remove_recipe_from_list": return "Took " + t(input.id) + " off the list";
+    case "add_items": return "Added " + (input.items || []).map((i) => (i.qty > 1 ? i.qty + " " : "") + i.name + " (" + storeName(i.store) + ")").join(", ");
+    case "get_list": return "Checked the " + storeName(input.store) + " list";
+    case "get_usuals": return "Checked your " + storeName(input.store) + " usuals";
+    case "get_pantry": return "Checked your pantry staples";
+    default: return name;
+  }
+};
+
+function AssistantSheet({ messages, busy, error, onSend, onReset, onClose, recipeTitle, storeName }) {
+  const [input, setInput] = useState("");
+  const endRef = useRef(null);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, busy]);
+
+  // Flatten the API-format history into chat bubbles and step lines.
+  const rows = [];
+  messages.forEach((m, i) => {
+    if (m.role === "user") {
+      if (typeof m.content === "string") rows.push({ kind: "user", text: m.content, k: i });
+      return;
+    }
+    (m.content || []).forEach((b, j) => {
+      if (b.type === "text" && b.text.trim()) rows.push({ kind: "assistant", text: b.text.trim(), k: i + "-" + j });
+      if (b.type === "tool_use") rows.push({ kind: "step", text: describeStep(b.name, b.input, recipeTitle, storeName), k: i + "-" + j });
+    });
+  });
+
+  const send = (q) => {
+    const text = (q ?? input).trim();
+    if (!text || busy) return;
+    setInput("");
+    onSend(text);
+  };
+
+  const starters = [
+    "Plan 2 dinners for this week and put them on my list",
+    "We're having 8 people Saturday — make the fish chowder and something for dessert",
+    "What usuals am I due for? Add them",
+    "Something high-protein in the cast iron tonight with what's on my list",
+  ];
+
+  return (
+    <Sheet title="Assistant" subtitle="Ask it to plan, cook, or shop — it does the steps" onClose={busy ? () => {} : onClose} wide>
+      <div className="flex flex-col gap-2.5">
+        {!rows.length && (
+          <div className="flex flex-col gap-1.5">
+            {starters.map((s) => (
+              <button key={s} type="button" onClick={() => send(s)}
+                className="rounded-xl bg-indigo-50 px-3.5 py-2.5 text-left text-[13px] font-medium text-indigo-800 ring-1 ring-indigo-100 hover:bg-indigo-100">
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {rows.map((r) =>
+          r.kind === "step" ? (
+            <div key={r.k} className="flex items-start gap-2 pl-1 text-[12.5px] text-slate-500">
+              <Check size={13} className="mt-0.5 shrink-0 text-emerald-500" /> <span>{r.text}</span>
+            </div>
+          ) : (
+            <div key={r.k} className={cx("flex", r.kind === "user" ? "justify-end" : "justify-start")}>
+              <div className={cx(
+                "max-w-[88%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed",
+                r.kind === "user" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800"
+              )}>
+                {r.text}
+              </div>
+            </div>
+          )
+        )}
+
+        {busy && (
+          <div className="flex items-center gap-2 pl-1 text-[13px] text-slate-400">
+            <Loader2 size={14} className="animate-spin" /> Working on it…
+          </div>
+        )}
+        {error && (
+          <p className="flex items-start gap-1.5 rounded-xl bg-red-50 p-3 text-[13px] text-red-700">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {error}
+          </p>
+        )}
+        <div ref={endRef} />
+
+        <div className="sticky bottom-0 flex gap-2 bg-white pt-1">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+            disabled={busy}
+            placeholder="e.g. plan 2 dinners this week and add them to my list"
+            className={INPUT}
+            autoFocus={!isMobile}
+          />
+          <button type="button" disabled={!input.trim() || busy} onClick={() => send()} className={cx(BTN_PRIMARY, "shrink-0")}>Go</button>
+        </div>
+        {rows.length > 0 && !busy && (
+          <button type="button" onClick={onReset} className="self-center text-[12px] font-medium text-slate-400 hover:text-slate-600">
+            Start a new conversation
+          </button>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
 /** "Ask for a change" box: sends the recipe + request to the AI and hands back the revised recipe. */
 function AiChangeBox({ getRecipe, onApply }) {
   const [ask, setAsk] = useState("");
@@ -3229,7 +3360,184 @@ function AppMain() {
   const selected = recipes.find((r) => r.id === selectedId);
 
   /* ── Shared chrome ─────────────────────────────────────────────────────── */
+  /* ── Assistant: the agent loop. The worker decides; these functions act. ── */
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [agentMsgs, setAgentMsgs] = useState([]);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentError, setAgentError] = useState(null);
+
+  // Tools run against the latest state: refreshed every render, read at call time.
+  const agentRef = useRef({});
+  agentRef.current = {
+    recipes, checkedIds, checkedItems, allShoppingItems, skippedStaples, pantry, usuals,
+    targetItems, targetChecked, lowesItems, lowesChecked, navStores,
+    addEntries, setServings, saveRecipesToFirestore,
+  };
+  const recipeTitle = (id) => agentRef.current.recipes.find((r) => r.id === id)?.title;
+
+  const runTool = async (name, input = {}) => {
+    const A = agentRef.current;
+    const findR = (id) => A.recipes.find((r) => r.id === id);
+    const brief = (r) => ({ id: r.id, title: r.title, category: r.category, servings: r.servings, favorite: !!r.favorite, onList: A.checkedIds.has(r.id) });
+    const activeOn = (sid) => {
+      if (sid === "mb") return A.allShoppingItems.filter((i) => !A.checkedItems.has(i.key)).map((i) => i.text + (i.manual ? "" : " (for " + i.recipe + ")"));
+      if (sid === "target") return A.targetItems.filter((i) => !A.targetChecked.has(i.key)).map((i) => i.text);
+      if (sid === "lowes") return A.lowesItems.filter((i) => !A.lowesChecked.has(i.key)).map((i) => i.text);
+      const st = A.navStores.find((x) => x.id === sid);
+      return st ? st.items.filter((i) => !st.checked.includes(i.key)).map((i) => i.text) : null;
+    };
+    const cleanList = (a) => (Array.isArray(a) ? a.map((x) => String(x).trim()).filter(Boolean) : undefined);
+
+    switch (name) {
+      case "search_recipes": {
+        const q = String(input.query || "").toLowerCase().trim();
+        const words = q.split(/\s+/).filter((w) => w.length > 1);
+        let list = A.recipes;
+        if (input.category) list = list.filter((r) => r.category === input.category);
+        if (words.length) list = list.filter((r) => {
+          const hay = (r.title + " " + r.category + " " + r.ingredients.join(" ")).toLowerCase();
+          return words.some((w) => hay.includes(w));
+        });
+        return { count: list.length, recipes: list.slice(0, 150).map(brief) };
+      }
+      case "get_recipe": {
+        const r = findR(input.id);
+        if (!r) return { error: "No recipe with that id." };
+        return { ...brief(r), ingredients: r.ingredients, instructions: r.instructions, notes: r.notes || "", storage: r.storage || "" };
+      }
+      case "create_recipe": {
+        const servings = Math.max(1, parseInt(input.servings) || 4);
+        const r = {
+          title: String(input.title || "Untitled Recipe").trim(),
+          category: CATEGORIES.includes(input.category) ? input.category : "Other",
+          servings, baseServings: servings,
+          ingredients: cleanList(input.ingredients) || [], instructions: cleanList(input.instructions) || [],
+          notes: String(input.notes || "").trim(), storage: String(input.storage || "").trim(),
+        };
+        const [id] = await A.saveRecipesToFirestore([r]);
+        return { id, title: r.title, saved: true };
+      }
+      case "update_recipe": {
+        const r = findR(input.id);
+        if (!r) return { error: "No recipe with that id." };
+        const patch = {};
+        if (input.title) patch.title = String(input.title).trim();
+        if (CATEGORIES.includes(input.category)) patch.category = input.category;
+        if (cleanList(input.ingredients)) patch.ingredients = cleanList(input.ingredients);
+        if (cleanList(input.instructions)) patch.instructions = cleanList(input.instructions);
+        if (typeof input.notes === "string") patch.notes = input.notes.trim();
+        if (typeof input.storage === "string") patch.storage = input.storage.trim();
+        if (input.servings) { const v = Math.max(1, parseInt(input.servings) || r.servings); patch.servings = v; if (patch.ingredients) patch.baseServings = v; }
+        await updateDoc(doc(db, "recipes", r.id), patch);
+        return { id: r.id, updated: Object.keys(patch) };
+      }
+      case "set_servings": {
+        const r = findR(input.id);
+        if (!r) return { error: "No recipe with that id." };
+        A.setServings(r.id, Math.max(1, parseInt(input.servings) || r.servings));
+        return { id: r.id, servings: input.servings };
+      }
+      case "add_recipe_to_list":
+      case "remove_recipe_from_list": {
+        const r = findR(input.id);
+        if (!r) return { error: "No recipe with that id." };
+        const on = name === "add_recipe_to_list";
+        setCheckedIds((p) => {
+          const n = new Set(p); on ? n.add(r.id) : n.delete(r.id);
+          saveShop({ checkedIds: [...n] });
+          return n;
+        });
+        if (!on) return { id: r.id, removed: true };
+        const ratio = r.servings / r.baseServings;
+        const skipped = r.ingredients
+          .map((ing) => toShoppingText(ratio !== 1 ? scaleIngredient(ing, ratio) : ing))
+          .filter((t) => isPantryStaple(t, A.pantry));
+        return { id: r.id, added: true, servings: r.servings, ingredients: r.ingredients.length, skippedAsPantryStaples: skipped };
+      }
+      case "add_items": {
+        const ids = new Set(A.navStores.map((x) => x.id));
+        const items = (input.items || [])
+          .filter((i) => i && String(i.name || "").trim())
+          .map((i) => ({ name: String(i.name).trim(), qty: Math.max(1, parseInt(i.qty) || 1), store: ids.has(i.store) ? i.store : "mb", section: "" }));
+        if (!items.length) return { error: "No items given." };
+        A.addEntries(items);
+        return { added: items.map((i) => ({ name: i.name, qty: i.qty, store: i.store })) };
+      }
+      case "get_list": {
+        const items = activeOn(input.store);
+        if (!items) return { error: "Unknown store id." };
+        return { store: input.store, items, ...(input.store === "mb" ? { skippedPantryStaples: A.skippedStaples } : {}) };
+      }
+      case "get_pantry":
+        return { staples: A.pantry };
+      case "get_usuals": {
+        const onList = new Set((activeOn(input.store) || []).map(usualName));
+        return { store: input.store, usuals: usualsFor(A.usuals[input.store], onList).map((u) => ({ name: u.label, usualQty: u.qty, due: u.due, timesBought: u.n })) };
+      }
+      default:
+        return { error: "Unknown tool." };
+    }
+  };
+
+  const runAgent = async (text) => {
+    setAgentBusy(true); setAgentError(null);
+    let msgs = [...agentMsgs, { role: "user", content: text }];
+    setAgentMsgs(msgs);
+    const context = {
+      stores: agentRef.current.navStores.map((x) => ({ id: x.id, name: x.label })),
+      today: new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
+    };
+    try {
+      for (let step = 0; step < 14; step++) {
+        const res = await fetch("/api/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "agent", messages: msgs, context }),
+        });
+        let data = {};
+        try { data = await res.json(); } catch { /* ignore */ }
+        if (!res.ok) throw new Error(data.error || "Assistant unavailable (" + res.status + ")");
+        msgs = [...msgs, { role: "assistant", content: data.content }];
+        setAgentMsgs(msgs);
+        const uses = (data.content || []).filter((b) => b.type === "tool_use");
+        if (!uses.length) break;
+        const results = [];
+        for (const u of uses) {
+          let out;
+          try { out = await runTool(u.name, u.input); } catch (e) { out = { error: e.message || String(e) }; }
+          results.push({ type: "tool_result", tool_use_id: u.id, content: JSON.stringify(out) });
+          await new Promise((r) => setTimeout(r, 120)); // let React re-render so the next tool sees fresh state
+        }
+        msgs = [...msgs, { role: "user", content: results }];
+        setAgentMsgs(msgs);
+        if (step === 13) setAgentError("Stopped after a lot of steps — ask it to continue if it wasn't finished.");
+      }
+    } catch (e) {
+      setAgentError(e.message);
+      // Drop a dangling tool request so the next message starts cleanly.
+      const last = msgs[msgs.length - 1];
+      if (last?.role === "assistant" && (last.content || []).some((b) => b.type === "tool_use")) msgs = msgs.slice(0, -1);
+      setAgentMsgs(msgs);
+    }
+    setAgentBusy(false);
+  };
+
+  const assistantEl = assistantOpen && (
+    <AssistantSheet
+      messages={agentMsgs}
+      busy={agentBusy}
+      error={agentError}
+      onSend={runAgent}
+      onReset={() => { setAgentMsgs([]); setAgentError(null); }}
+      onClose={() => setAssistantOpen(false)}
+      recipeTitle={recipeTitle}
+      storeName={(id) => navStores.find((x) => x.id === id)?.label || id}
+    />
+  );
+
   const nav = (
+    <>
+    {assistantEl}
     <SideNav
       open={navOpen}
       onClose={() => setNavOpen(false)}
@@ -3241,7 +3549,9 @@ function AppMain() {
       onSelectStore={(id) => { setStoreTab(id); setView("shopping"); setSelectedId(null); }}
       onRecipes={() => { setView("recipes"); setSelectedId(null); }}
       onAddStore={() => setStoreEditor({ mode: "create" })}
+      onAssistant={() => setAssistantOpen(true)}
     />
+    </>
   );
 
   const storeEditorEl = storeEditor && (
@@ -3542,6 +3852,7 @@ function AppMain() {
             right={
               <div className="flex shrink-0 items-center gap-1.5">
                 <IconBtn icon={ArrowUpDown} size={15} title={sortAZ ? "Sort Z→A" : "Sort A→Z"} onClick={() => setSortAZ((v) => !v)} />
+                <IconBtn icon={Sparkles} size={16} title="Assistant" onClick={() => setAssistantOpen(true)} tone="text-indigo-600 hover:bg-indigo-50" />
                 <button
                   type="button"
                   onClick={() => setIdeasOpen(true)}
@@ -3798,7 +4109,12 @@ function AppMain() {
           title={store.label}
           subtitle="Shopping list"
           onMenu={() => setNavOpen(true)}
-          right={<OverflowMenu items={menuItems} />}
+          right={
+            <div className="flex items-center gap-0.5">
+              <IconBtn icon={Sparkles} size={17} title="Assistant" onClick={() => setAssistantOpen(true)} tone="text-indigo-600 hover:bg-indigo-50" />
+              <OverflowMenu items={menuItems} />
+            </div>
+          }
         >
           <div className="px-4 pb-2.5">
             <ProgressRail

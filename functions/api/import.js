@@ -205,6 +205,66 @@ const describeStores = (stores) =>
       : "  (no sections)")
   ).join("\n\n");
 
+/* ── Assistant: an agent that works the app through tools ──────────────────
+   The worker holds the model and the tool definitions; the browser runs each
+   tool against the live app (Firestore + local state) and posts the results
+   back, so the loop needs no server-side database credentials. */
+
+const RECIPE_FIELDS = {
+  title: { type: "string" },
+  category: { type: "string", enum: CATEGORIES },
+  servings: { type: "integer", minimum: 1, description: "The servings the ingredient amounts are written for." },
+  ingredients: { type: "array", items: { type: "string" }, description: "Quantity first, digits, 1/2 or 1.5 (no ½), no heading lines." },
+  instructions: { type: "array", items: { type: "string" }, description: "One step per item, no numbering, times as digits + minutes/hours." },
+  notes: { type: "string" },
+  storage: { type: "string" },
+};
+
+const AGENT_TOOLS = [
+  { name: "search_recipes", description: "Search the household's saved recipes by words in the title or ingredients, and/or by category. With no arguments, lists every recipe (titles only).",
+    input_schema: { type: "object", properties: { query: { type: "string" }, category: { type: "string", enum: CATEGORIES } } } },
+  { name: "get_recipe", description: "Read one saved recipe in full.",
+    input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
+  { name: "create_recipe", description: "Save a new recipe to the collection. Use for dishes the user wants that aren't saved yet. Returns its id.",
+    input_schema: { type: "object", properties: RECIPE_FIELDS, required: ["title", "category", "servings", "ingredients", "instructions"] } },
+  { name: "update_recipe", description: "Change a saved recipe. Only include fields that change. If you rewrite ingredient amounts for a new number of people, include servings.",
+    input_schema: { type: "object", properties: { id: { type: "string" }, ...RECIPE_FIELDS }, required: ["id"] } },
+  { name: "set_servings", description: "Scale a saved recipe to a number of servings (its ingredient amounts and its shopping-list amounts scale automatically). Do this before adding it to the list when the user gives a head count.",
+    input_schema: { type: "object", properties: { id: { type: "string" }, servings: { type: "integer", minimum: 1 } }, required: ["id", "servings"] } },
+  { name: "add_recipe_to_list", description: "Put a recipe's ingredients on the Market Basket list (at its current servings). Pantry staples are skipped automatically; the result says which.",
+    input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
+  { name: "remove_recipe_from_list", description: "Take a recipe's ingredients off the Market Basket list.",
+    input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
+  { name: "add_items", description: "Add individual items to store lists (things not coming from a recipe).",
+    input_schema: { type: "object", properties: { items: { type: "array", items: { type: "object",
+      properties: { name: { type: "string" }, qty: { type: "integer", minimum: 1 }, store: { type: "string", description: "Store id." } },
+      required: ["name", "qty", "store"] } } }, required: ["items"] } },
+  { name: "get_list", description: "See what's currently on a store's list (not yet checked off).",
+    input_schema: { type: "object", properties: { store: { type: "string", description: "Store id." } }, required: ["store"] } },
+  { name: "get_pantry", description: "The household's pantry staples (always on hand, kept off the list).",
+    input_schema: { type: "object", properties: {} } },
+  { name: "get_usuals", description: "Items the household buys regularly at a store, with which ones are due.",
+    input_schema: { type: "object", properties: { store: { type: "string", description: "Store id." } }, required: ["store"] } },
+];
+
+const agentSystem = (ctx) => `You are the assistant inside Doug's List, a household app with a recipe collection and shopping lists for several stores. You don't just answer — you get things done by using the tools, taking as many steps as the job needs, then reporting back.
+
+How to work
+- Look before you act: search the saved recipes before writing a new one, and check a list before adding duplicates.
+- If the user wants a dish that isn't saved, write a reliable, well-tested version and save it with create_recipe (same formatting as the rest of the collection). Then use it like any other recipe.
+- When the user gives a head count, set_servings first, then add_recipe_to_list, so list amounts match.
+- Recipe ingredients go on the list with add_recipe_to_list (Market Basket only). Use add_items for anything else (drinks, paper plates, hardware…), choosing the right store.
+- Don't delete anything, and don't overwrite a recipe's ingredients or steps unless the user asked for that change.
+- Meal planning ("plan two dinners this week"): pick from saved recipes first, favoring favorites and variety (different proteins and styles, nothing already on the list); write new ones only if the collection is thin or the user asks for something new. Then add each to the list.
+- Only ask a question if you truly can't make a sensible choice; otherwise choose and mention what you chose.
+- Finish with a short plain-text report of what you did (recipes created or scaled, what went on which list, anything skipped as a pantry staple) and anything they should know. No markdown headings; short lists are fine.
+
+Stores (id: name): ${(ctx.stores || []).map((x) => `${x.id}: ${x.name}`).join("; ")}
+Today: ${ctx.today || ""}
+
+About this household:
+${HOUSEHOLD}`;
+
 /* ─────────────────────────────── helpers ─────────────────────────────── */
 
 const json = (body, status = 200) =>
@@ -432,6 +492,30 @@ export async function onRequestPost({ request, env }) {
       const keys = new Set(st.sections.map((x) => x.key));
       const placements = (out?.placements || []).filter((p) => texts.includes(p.text) && keys.has(p.section));
       return json({ placements });
+    }
+
+    // ── Assistant: one step of the agent loop ─────────────────────────────
+    if (body.mode === "agent") {
+      const messages = Array.isArray(body.messages) ? body.messages.slice(-60) : [];
+      if (!messages.length || messages[0].role !== "user") return json({ error: "Say what you'd like done." }, 400);
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          // Planning several steps and writing recipes along the way: the bigger model's job.
+          model: env.IMPORT_MODEL_VISION || MODEL_VISION,
+          max_tokens: 6000,
+          system: agentSystem(body.context || {}),
+          tools: AGENT_TOOLS,
+          messages,
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        return json({ error: `AI service error ${res.status}${detail ? ": " + detail.slice(0, 200) : ""}` }, 502);
+      }
+      const data = await res.json();
+      return json({ content: data.content || [], stop_reason: data.stop_reason });
     }
 
     // ── Question about a recipe (chat) ────────────────────────────────────
