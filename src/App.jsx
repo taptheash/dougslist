@@ -2268,10 +2268,16 @@ function StarRating({ value = 0, onChange, size = 18 }) {
 }
 
 /** "This week" dinners card: uncheck a meal to swap it for another. */
-function WeekPlanCard({ plan, settings, busy, error, getRecipe, onOpen, onSwap, onReplan, onSettings }) {
+function WeekPlanCard({ plan, settings, busy, error, getRecipe, onOpen, onSwap, onReplan, onSettings, recipes = [], onAdd }) {
   const [showSettings, setShowSettings] = useState(false);
   const [ask, setAsk] = useState("");
-  if (!settings.on && !plan) return null;
+  const [adding, setAdding] = useState(false);
+  const [q, setQ] = useState("");
+  const inPlan = new Set((plan?.meals || []).map((m) => m.id));
+  const matches = recipes
+    .filter((r) => !inPlan.has(r.id) && (!q.trim() || (r.title + " " + catsOf(r).join(" ")).toLowerCase().includes(q.toLowerCase().trim())))
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.title.localeCompare(b.title))
+    .slice(0, 8);
   const current = plan && plan.weekOf;
   return (
     <div className={cx(CARD, "mb-3 overflow-hidden")}>
@@ -2280,7 +2286,7 @@ function WeekPlanCard({ plan, settings, busy, error, getRecipe, onOpen, onSwap, 
         <div className="min-w-0 flex-1">
           <div className="text-[13.5px] font-semibold text-slate-900">This week's dinners</div>
           <div className="text-[11.5px] text-slate-400">
-            {busy === "plan" ? "Planning…" : current ? "On your Market Basket list · uncheck one to swap it" : "Not planned yet"}
+            {busy === "plan" ? "Planning…" : current ? "On your Market Basket list · uncheck a pick to swap it" : "Not planned yet"}
           </div>
         </div>
         <IconBtn icon={RotateCcw} size={14} title="Plan again" onClick={() => onReplan("")} />
@@ -2315,20 +2321,48 @@ function WeekPlanCard({ plan, settings, busy, error, getRecipe, onOpen, onSwap, 
           return (
             <div key={m.id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-slate-50">
               {swapping ? <Loader2 size={18} className="shrink-0 animate-spin text-indigo-500" />
-                : <Checkbox checked onChange={() => onSwap(m.id)} shape="square" label={"Swap " + m.title + " for something else"} />}
+                : <Checkbox checked onChange={() => onSwap(m.id)} shape="square" label={m.mine ? "Remove " + m.title : "Swap " + m.title + " for something else"} />}
               <button type="button" onClick={() => r && onOpen(m.id)} className="min-w-0 flex-1 text-left">
                 <div className="truncate text-[14px] font-medium text-slate-800">{r?.title || m.title}</div>
                 <div className="flex items-center gap-1.5 text-[11.5px] text-slate-400">
                   {r?.rating > 0 && <StarRating value={r.rating} size={10} />}
-                  <span className="truncate">{swapping ? "Finding something else…" : m.reason}</span>
+                  {m.mine
+                    ? <span className="rounded-full bg-slate-100 px-1.5 py-px text-[10px] font-semibold text-slate-500">Added by you</span>
+                    : <span className="rounded-full bg-indigo-50 px-1.5 py-px text-[10px] font-semibold text-indigo-600">Planner pick</span>}
+                  <span className="truncate">{swapping ? "Finding something else…" : m.mine ? "uncheck to remove" : m.reason}</span>
                 </div>
               </button>
             </div>
           );
         })}
         {busy === "plan" && <p className="flex items-center gap-2 px-2 py-2 text-[12.5px] text-slate-400"><Loader2 size={13} className="animate-spin" /> Picking dinners from your recipes…</p>}
-        {!busy && !(plan?.meals || []).length && (
+        {!busy && !(plan?.meals || []).some((m) => !m.mine) && (
           <button type="button" onClick={() => onReplan("")} className="w-full px-2 py-2 text-left text-[13px] font-medium text-indigo-600">Plan this week now</button>
+        )}
+        {onAdd && !adding && (
+          <button type="button" onClick={() => setAdding(true)} className="flex w-full items-center gap-2 px-2 py-2 text-left text-[13px] font-medium text-indigo-600">
+            <Plus size={14} /> Add a dinner
+          </button>
+        )}
+        {adding && (
+          <div className="mx-1 mb-1 rounded-xl bg-slate-50 p-2 ring-1 ring-slate-200">
+            <div className="flex gap-2">
+              <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus placeholder="Find one of your recipes…"
+                className="min-w-0 flex-1 rounded-lg bg-white px-2.5 py-1.5 text-[13.5px] ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <button type="button" onClick={() => { setAdding(false); setQ(""); }} className="px-2 text-[12.5px] font-medium text-slate-500">Done</button>
+            </div>
+            <div className="mt-1.5 flex flex-col">
+              {matches.map((r) => (
+                <button key={r.id} type="button" onClick={() => onAdd(r.id)}
+                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-white">
+                  <Plus size={13} className="shrink-0 text-indigo-500" />
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-slate-800">{r.title}</span>
+                  {r.rating > 0 && <StarRating value={r.rating} size={10} />}
+                </button>
+              ))}
+              {!matches.length && <p className="px-2 py-1.5 text-[12.5px] text-slate-400">No matches.</p>}
+            </div>
+          </div>
         )}
         {error && <p className="px-2 pb-1 text-[12px] text-red-600">{error}</p>}
       </div>
@@ -3791,12 +3825,16 @@ function AppMain() {
       const prev = mealPlan || {};
       const history = [...(prev.history || []), ...((prev.meals || []).map((m) => m.title))].slice(-16);
       const sameWeek = prev.weekOf === weekStart();
-      const picks = await pickMeals({ count: planSettings.count, recent: history, request });
-      // Take last plan's meals off the list (they were put there by the planner).
-      (prev.meals || []).forEach((m) => { if (!picks.some((p) => p.id === m.id)) setRecipeOnList(m.id, false); });
-      const meals = picks.map((p) => ({ id: p.id, title: recipes.find((r) => r.id === p.id)?.title || "", reason: p.reason }));
-      meals.forEach((m) => setRecipeOnList(m.id, true));
-      writePlan({ weekOf: weekStart(), meals, skipped: sameWeek ? prev.skipped || [] : [], history, madeAt: Date.now(), fresh: true });
+      // Dinners you added yourself this week stay; a new week starts clean.
+      const mine = sameWeek ? (prev.meals || []).filter((m) => m.mine) : [];
+      const picks = await pickMeals({ count: planSettings.count, recent: history, request, exclude: mine.map((m) => m.id), keep: mine.map((m) => m.title) });
+      // Take the planner's old picks off the list (it put them there); keep yours.
+      (prev.meals || []).forEach((m) => {
+        if ((!m.mine || !sameWeek) && !picks.some((p) => p.id === m.id) && !mine.some((x) => x.id === m.id)) setRecipeOnList(m.id, false);
+      });
+      const planned = picks.map((p) => ({ id: p.id, title: recipes.find((r) => r.id === p.id)?.title || "", reason: p.reason }));
+      planned.forEach((m) => setRecipeOnList(m.id, true));
+      writePlan({ weekOf: weekStart(), meals: [...planned, ...mine], skipped: sameWeek ? prev.skipped || [] : [], history, madeAt: Date.now(), fresh: true });
     } catch (e) { setPlanError(e.message); }
     setPlanBusy(null);
   };
@@ -3804,6 +3842,12 @@ function AppMain() {
   /** Unchecked a planned meal: take it off the list and swap in something else. */
   const swapMeal = async (id) => {
     if (planBusy || !mealPlan) return;
+    const meal = mealPlan.meals.find((m) => m.id === id);
+    if (meal?.mine) {
+      setRecipeOnList(id, false);
+      writePlan({ ...mealPlan, meals: mealPlan.meals.filter((m) => m.id !== id) });
+      return;
+    }
     setPlanBusy(id); setPlanError(null);
     setRecipeOnList(id, false);
     try {
@@ -3826,6 +3870,22 @@ function AppMain() {
     }
     setPlanBusy(null);
   };
+
+  /** Add one of your recipes to this week's dinners (and the list). Not swapped by the planner. */
+  const addToWeek = (id) => {
+    const r = recipes.find((x) => x.id === id);
+    if (!r) return;
+    const base = mealPlan && mealPlan.weekOf === weekStart() ? mealPlan : { weekOf: weekStart(), meals: [], skipped: [], history: [...((mealPlan && mealPlan.history) || []), ...((mealPlan && mealPlan.meals) || []).map((m) => m.title)].slice(-16), madeAt: Date.now() };
+    if (base.meals.some((m) => m.id === id)) return;
+    setRecipeOnList(id, true);
+    writePlan({ ...base, meals: [...base.meals, { id, title: r.title, reason: "You added this", mine: true }] });
+  };
+  const removeFromWeek = (id) => {
+    if (!mealPlan) return;
+    setRecipeOnList(id, false);
+    writePlan({ ...mealPlan, meals: mealPlan.meals.filter((m) => m.id !== id) });
+  };
+  const thisWeek = mealPlan && mealPlan.weekOf === weekStart() ? mealPlan : null;
 
   // First open of a new week: plan it automatically.
   useEffect(() => {
@@ -4661,6 +4721,24 @@ function AppMain() {
                   );
                 })()}
 
+                {(() => {
+                  const inWeek = thisWeek?.meals.find((m) => m.id === selected.id);
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => (inWeek ? (inWeek.mine ? removeFromWeek(selected.id) : swapMeal(selected.id)) : addToWeek(selected.id))}
+                      className={cx("mb-3 flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left ring-1 transition-colors",
+                        inWeek ? "bg-indigo-50 ring-indigo-100" : "bg-white ring-slate-200 hover:bg-slate-50")}
+                    >
+                      <CalendarDays size={17} className="shrink-0 text-indigo-600" />
+                      <span className="min-w-0 flex-1 text-[13.5px] font-medium text-slate-800">
+                        {inWeek ? "In this week's dinners" + (inWeek.mine ? "" : " (planner pick)") : "Add to this week's dinners"}
+                      </span>
+                      <span className="shrink-0 text-[12.5px] font-semibold text-indigo-600">{inWeek ? (inWeek.mine ? "Remove" : "Swap") : "Add"}</span>
+                    </button>
+                  );
+                })()}
+
                 <button
                   type="button"
                   onClick={() => setAskOpen(true)}
@@ -4961,7 +5039,9 @@ function AppMain() {
 
             {!searchWords.length && !minRating && activeTab === "All" && (
               <WeekPlanCard
-                plan={mealPlan && mealPlan.weekOf === weekStart() ? mealPlan : null}
+                plan={thisWeek}
+                recipes={recipes}
+                onAdd={addToWeek}
                 settings={planSettings}
                 busy={planBusy}
                 error={planError}
