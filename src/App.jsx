@@ -2837,9 +2837,22 @@ function AppMain() {
     setRemovedKeys(new Set()); setEditingKey(null); saveShop(e);
   };
 
+  /**
+   * Put a recipe on (or take it off) the Market Basket list. Either way its items start fresh:
+   * anything from that recipe you'd checked off or removed is forgotten, so re-adding it brings
+   * back the full ingredient list (pantry staples are still left off).
+   */
+  const setRecipeOnList = (id, on) => {
+    const mine = (k) => k.startsWith("r" + id + "::");
+    setCheckedIds((p) => { const n = new Set(p); on ? n.add(id) : n.delete(id); saveShop({ checkedIds: [...n] }); return n; });
+    setRemovedKeys((p) => { const n = new Set([...p].filter((k) => !mine(k))); if (n.size !== p.size) saveShop({ removedKeys: [...n] }); return n; });
+    setCheckedItems((p) => { const n = new Set([...p].filter((k) => !mine(k))); if (n.size !== p.size) saveShop({ checkedItems: [...n] }); return n; });
+    setTripChecked((p) => { const n = new Set([...p].filter((k) => !mine(k))); if (n.size !== p.size) saveShop({ tripChecked: [...n] }); return n; });
+  };
+
   const toggleCheck = (id, e) => {
-    e.stopPropagation();
-    setCheckedIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); saveShop({ checkedIds: [...n] }); return n; });
+    e?.stopPropagation();
+    setRecipeOnList(id, !checkedIds.has(id));
   };
 
   /** Add keys to (on) or drop them from (off) the current trip. */
@@ -3416,7 +3429,7 @@ function AppMain() {
   agentRef.current = {
     recipes, checkedIds, checkedItems, allShoppingItems, skippedStaples, pantry, usuals,
     targetItems, targetChecked, lowesItems, lowesChecked, navStores,
-    addEntries, setServings, saveRecipesToFirestore,
+    addEntries, setServings, saveRecipesToFirestore, setRecipeOnList,
   };
   const recipeTitle = (id) => agentRef.current.recipes.find((r) => r.id === id)?.title;
 
@@ -3487,11 +3500,7 @@ function AppMain() {
         const r = findR(input.id);
         if (!r) return { error: "No recipe with that id." };
         const on = name === "add_recipe_to_list";
-        setCheckedIds((p) => {
-          const n = new Set(p); on ? n.add(r.id) : n.delete(r.id);
-          saveShop({ checkedIds: [...n] });
-          return n;
-        });
+        A.setRecipeOnList(r.id, on);
         if (!on) return { id: r.id, removed: true };
         const ratio = r.servings / r.baseServings;
         const skipped = r.ingredients
