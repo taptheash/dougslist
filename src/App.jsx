@@ -3573,49 +3573,61 @@ function AppMain() {
   const selected = recipes.find((r) => r.id === selectedId);
 
   /* ── Shared chrome ─────────────────────────────────────────────────────── */
-  /* ── One-time category pass: recipes saved before multiple categories existed
-     get their extra categories from the AI (e.g. a meatloaf also under Meats). ── */
+  /* ── Category pass: the AI gives recipes their extra categories (a meatloaf also under
+     Meats). Runs once by itself for recipes saved before multiple categories existed,
+     and on demand ("Sort into categories") for every recipe. ── */
   const categorizingRef = useRef(false);
-  const [catPass, setCatPass] = useState(null); // null | { done, total }
-  useEffect(() => {
-    if (loading || categorizingRef.current) return;
-    const todo = recipes.filter((r) => !Array.isArray(r.categories));
-    if (!todo.length) return;
+  const autoCatTriedRef = useRef(false);
+  const [catPass, setCatPass] = useState(null); // null | { done, total, changed, error }
+
+  const runCategoryPass = async (all = false) => {
+    if (categorizingRef.current) return;
+    const todo = all ? recipes : recipes.filter((r) => !Array.isArray(r.categories));
+    if (!todo.length) { setCatPass({ done: 0, total: 0, changed: 0 }); setTimeout(() => setCatPass(null), 3000); return; }
     categorizingRef.current = true;
-    (async () => {
-      let failed = false;
-      setCatPass({ done: 0, total: todo.length });
-      for (let i = 0; i < todo.length; i += 25) {
-        const chunk = todo.slice(i, i + 25);
-        try {
-          const res = await fetch("/api/import", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              mode: "categorize",
-              recipes: chunk.map((r) => ({ id: r.id, title: r.title, category: catsOf(r)[0], ingredients: r.ingredients })),
-            }),
-          });
-          if (!res.ok) { failed = true; break; } // try again next time the app opens
-          const { results = [] } = await res.json();
-          const extra = Object.fromEntries(results.map((x) => [x.id, x.extra]));
-          const batch = writeBatch(db);
-          chunk.forEach((r) => {
-            const cats = catsOf({ category: catsOf(r)[0], categories: extra[r.id] || [] });
-            batch.update(doc(db, "recipes", r.id), { categories: cats, category: cats[0] });
-          });
-          await batch.commit();
-          setCatPass({ done: Math.min(todo.length, i + 25), total: todo.length });
-        } catch (e) {
-          console.error("category pass failed:", e);
-          failed = true;
-          break;
-        }
+    let changed = 0;
+    setCatPass({ done: 0, total: todo.length, changed: 0 });
+    try {
+      for (let i = 0; i < todo.length; i += 20) {
+        const chunk = todo.slice(i, i + 20);
+        const res = await fetch("/api/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "categorize",
+            recipes: chunk.map((r) => ({ id: r.id, title: r.title, category: catsOf(r)[0], ingredients: r.ingredients })),
+          }),
+        });
+        let data = {};
+        try { data = await res.json(); } catch { /* not JSON */ }
+        if (!res.ok) throw new Error(data.error || "AI service error " + res.status);
+        const extra = Object.fromEntries((data.results || []).map((x) => [x.id, x.extra]));
+        const batch = writeBatch(db);
+        chunk.forEach((r) => {
+          const before = catsOf(r);
+          const keep = all ? before : [before[0]];
+          const cats = catsOf({ category: before[0], categories: [...keep, ...(extra[r.id] || [])] });
+          if (cats.join("|") !== before.join("|")) changed++;
+          batch.update(doc(db, "recipes", r.id), { categories: cats, category: cats[0] });
+        });
+        await batch.commit();
+        setCatPass({ done: Math.min(todo.length, i + 20), total: todo.length, changed });
       }
-      setTimeout(() => setCatPass(null), 2500);
-      if (!failed) categorizingRef.current = false; // on failure, wait until the app is reopened
-    })();
-  }, [loading, recipes]);
+      setTimeout(() => setCatPass(null), 6000);
+    } catch (e) {
+      console.error("category pass failed:", e);
+      setCatPass((p) => ({ ...(p || {}), error: e.message || String(e) }));
+    }
+    categorizingRef.current = false;
+  };
+
+  // Run by itself once, the first time the Recipes page is open with older recipes.
+  useEffect(() => {
+    if (loading || view !== "recipes" || autoCatTriedRef.current) return;
+    if (!recipes.some((r) => !Array.isArray(r.categories))) return;
+    autoCatTriedRef.current = true;
+    runCategoryPass(false);
+  }, [loading, view, recipes]);
 
   /* ── Assistant: the agent loop. The worker decides; these functions act. ── */
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -4200,6 +4212,10 @@ function AppMain() {
               <div className="flex shrink-0 items-center gap-1.5">
                 <IconBtn icon={ArrowUpDown} size={15} title={sortAZ ? "Sort Z→A" : "Sort A→Z"} onClick={() => setSortAZ((v) => !v)} />
                 <IconBtn icon={Sparkles} size={16} title="Assistant" onClick={() => setAssistantOpen(true)} tone="text-indigo-600 hover:bg-indigo-50" />
+                <OverflowMenu items={[
+                  { icon: Layers, label: "Sort new recipes into categories", onClick: () => runCategoryPass(false) },
+                  { icon: Layers, label: "Re-sort all recipes (AI)", onClick: () => runCategoryPass(true) },
+                ]} />
                 <button
                   type="button"
                   onClick={() => setIdeasOpen(true)}
@@ -4272,12 +4288,23 @@ function AppMain() {
           <main className="mx-auto max-w-2xl px-4 pb-16 pt-3">
 
             {catPass && (
-              <p className="mb-2 flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-2 text-[12.5px] text-indigo-800 ring-1 ring-indigo-100">
-                {catPass.done < catPass.total ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                {catPass.done < catPass.total
-                  ? "Sorting your recipes into extra categories… " + catPass.done + "/" + catPass.total
-                  : "Done — recipes now show under every category that fits."}
-              </p>
+              <div className={cx(
+                "mb-2 flex items-start gap-2 rounded-xl px-3 py-2 text-[12.5px] ring-1",
+                catPass.error ? "bg-red-50 text-red-800 ring-red-100" : "bg-indigo-50 text-indigo-800 ring-indigo-100"
+              )}>
+                {catPass.error ? <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                  : catPass.done < catPass.total ? <Loader2 size={13} className="mt-0.5 shrink-0 animate-spin" />
+                    : <Check size={13} className="mt-0.5 shrink-0" />}
+                <span className="min-w-0 flex-1">
+                  {catPass.error
+                    ? "Couldn't sort categories: " + catPass.error
+                    : catPass.total === 0 ? "Every recipe has already been sorted. Use ⋮ → Re-sort all recipes to run it again."
+                      : catPass.done < catPass.total
+                        ? "Sorting your recipes into extra categories… " + catPass.done + " of " + catPass.total
+                        : "Done — " + catPass.changed + " recipe" + (catPass.changed !== 1 ? "s" : "") + " got extra categories."}
+                </span>
+                {catPass.error && <button type="button" onClick={() => { setCatPass(null); runCategoryPass(false); }} className="shrink-0 font-semibold underline">Try again</button>}
+              </div>
             )}
             {searchWords.length > 0 && (
               <p className="mb-2 px-1 text-[12.5px] text-slate-500">
