@@ -1198,6 +1198,13 @@ function AddItemBar({ qty, setQty, value, setValue, onAdd, onSmartAdd, smartBusy
 
 /* ── Usuals: learned from what you add ── */
 
+/** A name too vague to base an aisle rule on: a bare unit ("cup"), or under 3 letters. */
+const UNIT_WORDS = new Set(["cup","cups","c","tbsp","tbs","tablespoon","tablespoons","tsp","teaspoon","teaspoons","oz","ounce","ounces","lb","lbs","pound","pounds","g","gram","grams","kg","ml","l","liter","quart","quarts","pint","pints","gallon","can","cans","jar","jars","bag","bags","box","boxes","package","packages","pkg","clove","cloves","pinch","dash","piece","pieces","stick","sticks","slice","slices","bunch","bunches","head","heads","stalk","stalks","handful","large","medium","small","whole","item","items"]);
+const isVagueName = (name) => {
+  const n = String(name || "").toLowerCase().replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+  return n.length < 3 || n.split(" ").every((w) => UNIT_WORDS.has(w));
+};
+
 const DAY = 86400000;
 const usualName = (text) => String(text).toLowerCase().replace(/^[\d./\s]+(x\s+)?/, "").replace(/\s+/g, " ").trim();
 
@@ -2500,7 +2507,16 @@ function AppMain() {
     const unsub = onSnapshot(doc(db, "app", "mbSettings"), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.aisleRules) setAisleRules(data.aisleRules);
+        if (data.aisleRules) {
+          // Drop rules keyed on a bare unit like "cup" — they'd drag every "... cup ..." item into one aisle.
+          const bad = Object.keys(data.aisleRules).filter(isVagueName);
+          if (bad.length) {
+            const clean = { ...data.aisleRules };
+            bad.forEach((k) => delete clean[k]);
+            setAisleRules(clean);
+            updateDoc(doc(db, "app", "mbSettings"), { aisleRules: clean }).catch(() => {});
+          } else setAisleRules(data.aisleRules);
+        }
         setPantry(Array.isArray(data.pantry) ? data.pantry : []);
         setUsuals(data.usuals && typeof data.usuals === "object" ? data.usuals : {});
       }
@@ -3147,7 +3163,7 @@ function AppMain() {
         setManualItems(u); saveShop({ manualItems: u });
         const rules = {};
         list.forEach((e) => {
-          if (e.section && classifyWithRules(e.name) !== e.section) rules[usualName(e.name)] = e.section;
+          if (e.section && !isVagueName(usualName(e.name)) && classifyWithRules(e.name) !== e.section) rules[usualName(e.name)] = e.section;
         });
         if (Object.keys(rules).length) {
           setAisleRules((prev) => ({ ...prev, ...rules }));
@@ -3234,7 +3250,7 @@ function AppMain() {
   useEffect(() => {
     if (!authReady) return;
     const fresh = (sid, texts) =>
-      [...new Set(texts.map(usualName))].filter((t) => t && !placedRef.current.has(sid + "::" + t)).slice(0, 40);
+      [...new Set(texts.map(usualName))].filter((t) => t && !isVagueName(t) && !placedRef.current.has(sid + "::" + t)).slice(0, 40);
     const jobs = [];
     const mb = fresh("mb", allShoppingItems.filter((i) => isMbUnplaced(i.text)).map((i) => parseAmount(i.text).name || i.text));
     if (mb.length) jobs.push({ sid: "mb", texts: mb });
@@ -3268,7 +3284,7 @@ function AppMain() {
 
         if (job.sid === "mb") {
           const rules = {};
-          placements.forEach((p) => { if (p.section !== "kitchen") rules[p.text] = p.section; });
+          placements.forEach((p) => { if (p.section !== "kitchen" && !isVagueName(p.text)) rules[p.text] = p.section; });
           if (Object.keys(rules).length) {
             setAisleRules((prev) => ({ ...prev, ...rules }));
             setDoc(doc(db, "app", "mbSettings"), { aisleRules: rules }, { merge: true });

@@ -170,7 +170,9 @@ export const classifyIngredient = (ing) => {
   return "kitchen";
 };
 
-export const PREP_STRIP = /,?\s*(diced|chopped|minced|sliced|crushed|peeled|grated|shredded|julienned|halved|quartered|cubed|trimmed|thawed|drained|rinsed|beaten|softened|melted|room temperature|coarsely|finely|thinly|roughly|freshly|packed|heaping|level|divided|optional|to taste|for serving|for garnish|for frying|as needed|or more|or less|hand-crushed|torn|zested and juiced|juiced|zested|deveined|pounded|cut into cubes|separated|crumbled|peeled and cubed|peeled and diced|cooked and shredded|thinly sliced|roughly chopped|finely chopped|lightly beaten|freshly grated|freshly ground)[^,]*/gi;
+// Only strips a prep phrase that follows a comma (", finely chopped"). Before this required the
+// comma, "1/2 cup chopped pecans" lost everything after "chopped" and became "1/2 cup".
+export const PREP_STRIP = /,\s*(diced|chopped|minced|sliced|crushed|peeled|grated|shredded|julienned|halved|quartered|cubed|trimmed|thawed|drained|rinsed|beaten|softened|melted|room temperature|coarsely|finely|thinly|roughly|freshly|packed|heaping|level|divided|optional|to taste|for serving|for garnish|for frying|as needed|or more|or less|hand-crushed|torn|zested and juiced|juiced|zested|deveined|pounded|cut into cubes|separated|crumbled|peeled and cubed|peeled and diced|cooked and shredded|thinly sliced|roughly chopped|finely chopped|lightly beaten|freshly grated|freshly ground)[^,]*/gi;
 export const COOK_WORDS = /\b(diced|chopped|minced|sliced|crushed|peeled|grated|shredded|cubed|trimmed|beaten|softened|melted|thawed|drained|rinsed|coarsely|finely|thinly|roughly|freshly|packed|heaping|divided|optional)\b/gi;
 export const SPICES_AND_PANTRY = ["salt","pepper","black pepper","white pepper","red pepper flakes","crushed red pepper","cayenne","chili powder","cumin","paprika","smoked paprika","oregano","italian seasoning","garlic powder","onion powder","cinnamon","turmeric","nutmeg","sage","thyme","rosemary","marjoram","bay leaf","coriander","allspice","cardamom","fennel","dill","curry powder","garam masala","old bay","anise","anise seed","anise seeds","star anise","baking soda","baking powder","cornstarch","yeast","vanilla extract","vanilla","cocoa powder","sugar","brown sugar","powdered sugar","kosher salt","sea salt","flour","olive oil","vegetable oil","canola oil","coconut oil","sesame oil","garlic oil","soy sauce","worcestershire","fish sauce","hot sauce","sriracha","honey","maple syrup","vinegar","balsamic","apple cider vinegar","red wine vinegar","white wine vinegar","miso paste","tomato paste","chipotle","italian herbs","breadcrumbs","panko","dijon mustard","dijon"];
 
@@ -263,6 +265,8 @@ export const toShoppingText = (raw) => {
     }
   }
   let cleaned = raw.replace(PREP_STRIP, "").replace(/,\s*$/, "").trim();
+  // Any other trailing ", cut into pieces"-style note isn't needed on a shopping list.
+  if (cleaned.includes(",")) { const head = cleaned.split(",")[0].trim(); if (/[a-z]{3,}/i.test(head.replace(/^[\d./\s]+/, ""))) cleaned = head; }
   cleaned = cleaned.replace(COOK_WORDS, "").replace(/\s{2,}/g, " ").replace(/,\s*$/, "").trim();
   return cleaned || raw;
 };
