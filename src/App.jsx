@@ -2436,6 +2436,16 @@ function AppMain() {
   const [importOpen, setImportOpen] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [ideasOpen, setIdeasOpen] = useState(false);
+  const searchRef = useRef(null);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
+        if (searchRef.current) { e.preventDefault(); searchRef.current.focus(); }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   const [editingRecipeId, setEditingRecipeId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
@@ -3446,15 +3456,32 @@ function AppMain() {
   };
 
   const favCount = recipes.filter((r) => r.favorite).length;
+  /* Search looks across every recipe (title, categories, ingredients, notes), whatever tab is
+     open. Every word must match somewhere; title hits rank first. Plurals are forgiven. */
+  const searchWords = search.toLowerCase().split(/[\s,]+/).map((w) => w.trim()).filter((w) => w.length > 1);
   const filtered = useMemo(() => {
+    const byName = (a, b) => (sortAZ ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title));
+    if (searchWords.length) {
+      const stem = (w) => w.replace(/(es|s)$/, "");
+      const has = (hay, w) => hay.includes(w) || hay.includes(stem(w));
+      return recipes
+        .map((r) => {
+          const title = r.title.toLowerCase();
+          const cats = catsOf(r).join(" ").toLowerCase();
+          const ings = r.ingredients.join(" | ").toLowerCase();
+          const rest = ((r.notes || "") + " " + r.instructions.join(" ")).toLowerCase();
+          if (!searchWords.every((w) => has(title, w) || has(cats, w) || has(ings, w) || has(rest, w))) return null;
+          const score = searchWords.reduce((n, w) => n + (has(title, w) ? 4 : has(cats, w) ? 2 : has(ings, w) ? 1 : 0), 0);
+          const hit = r.ingredients.find((i) => searchWords.some((w) => has(i.toLowerCase(), w) && !has(title, w)));
+          return { ...r, _score: score, _hit: hit };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b._score - a._score || byName(a, b));
+    }
     let list = recipes;
     if (activeTab === "Favorites") list = list.filter((r) => r.favorite);
     else if (activeTab !== "All") list = list.filter((r) => catsOf(r).includes(activeTab));
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((r) => r.title.toLowerCase().includes(q) || r.ingredients.some((i) => i.toLowerCase().includes(q)));
-    }
-    return [...list].sort((a, b) => (sortAZ ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)));
+    return [...list].sort(byName);
   }, [recipes, activeTab, search, sortAZ]);
 
   const selected = recipes.find((r) => r.id === selectedId);
@@ -3858,6 +3885,31 @@ function AppMain() {
                   />
                 </div>
 
+                <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11.5px] font-medium text-slate-400">Found in:</span>
+                  {catsOf(selected).map((c, ci) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => { setActiveTab(c); setSearch(""); setSelectedId(null); }}
+                      className={cx("rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1 transition-colors",
+                        ci === 0 ? "bg-indigo-50 text-indigo-700 ring-indigo-100 hover:bg-indigo-100" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50")}
+                      title={"See all " + c}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                  {selected.favorite && (
+                    <button type="button" onClick={() => { setActiveTab("Favorites"); setSearch(""); setSelectedId(null); }}
+                      className="flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-700 ring-1 ring-amber-100">
+                      <Star size={11} className="fill-amber-400 text-amber-400" /> Favorites
+                    </button>
+                  )}
+                  <button type="button" onClick={() => startEditRecipe(selected)} className="text-[11.5px] font-medium text-indigo-600 hover:underline">
+                    Edit categories
+                  </button>
+                </div>
+
                 {(() => {
                   const onList = checkedIds.has(selected.id);
                   const r0 = selected.servings / selected.baseServings;
@@ -4011,6 +4063,28 @@ function AppMain() {
               </div>
             }
           >
+            <div className="relative px-4 pb-2">
+              <Search size={15} className="pointer-events-none absolute left-7 top-[calc(50%-4px)] -translate-y-1/2 text-slate-400" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && setSearch("")}
+                placeholder="Search all recipes — name, ingredient, category…"
+                className="w-full rounded-full bg-slate-100 py-2.5 pl-10 pr-9 text-[14.5px] text-slate-900 ring-1 ring-transparent transition-shadow duration-150 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-6 top-[calc(50%-4px)] grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                  aria-label="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            {!searchWords.length && (
             <div className="no-scrollbar flex gap-1.5 overflow-x-auto px-4 pb-2.5">
               {CATEGORIES.map((cat) => {
                 const on = activeTab === cat;
@@ -4036,29 +4110,29 @@ function AppMain() {
                 );
               })}
             </div>
+            )}
           </AppHeader>
 
           <main className="mx-auto max-w-2xl px-4 pb-16 pt-3">
-            <div className="relative mb-3">
-              <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search recipes or ingredients…"
-                className="w-full rounded-full bg-white py-2.5 pl-10 pr-9 text-[14.5px] text-slate-900 ring-1 ring-slate-200 transition-shadow duration-150 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="absolute right-2.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
 
-            {filtered.length === 0 ? (
+            {searchWords.length > 0 && (
+              <p className="mb-2 px-1 text-[12.5px] text-slate-500">
+                {filtered.length} recipe{filtered.length !== 1 ? "s" : ""} match “{search.trim()}” across all categories
+              </p>
+            )}
+            {searchWords.length > 0 && filtered.length === 0 ? (
+              <div className="mt-6 text-center">
+                <p className="text-[14px] font-semibold text-slate-700">Nothing saved matches “{search.trim()}”.</p>
+                <div className="mt-3 flex flex-wrap justify-center gap-2">
+                  <button type="button" onClick={() => { setIdeasOpen(true); }} className={cx(BTN_PRIMARY, "flex items-center gap-1.5")}>
+                    <Lightbulb size={14} /> Get a recipe for it
+                  </button>
+                  <button type="button" onClick={() => { setAssistantOpen(true); runAgent("Find recipes for: " + search.trim() + " — check my saved recipes for close matches first."); }} className={cx(BTN_GHOST, "flex items-center gap-1.5")}>
+                    <Sparkles size={14} /> Ask the assistant
+                  </button>
+                </div>
+              </div>
+            ) : filtered.length === 0 ? (
               <EmptyState
                 icon={BookOpen}
                 title={search ? "No recipes match your search." : activeTab === "Favorites" ? "No favorites yet." : "No recipes in this category yet."}
@@ -4075,7 +4149,14 @@ function AppMain() {
                     <Checkbox checked={on} shape="square" onChange={(e) => toggleCheck(r.id, e)} label={"Add " + r.title + " to Market Basket"} />
                     <button type="button" onClick={() => setSelectedId(r.id)} className="min-w-0 flex-1 text-left">
                       <p className="truncate text-[15px] font-semibold text-slate-900 transition-colors group-hover:text-indigo-600">{r.title}</p>
-                      <p className="mt-0.5 text-[12px] text-slate-400">{catsOf(r).join(" · ")} · {r.servings} servings</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {catsOf(r).map((c, ci) => (
+                          <span key={c} className={cx("rounded-full px-2 py-px text-[10.5px] font-semibold",
+                            ci === 0 ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-500")}>{c}</span>
+                        ))}
+                        <span className="text-[11.5px] text-slate-400">· {r.servings} servings</span>
+                      </div>
+                      {r._hit && <p className="mt-1 truncate text-[11.5px] text-slate-500">has: {r._hit}</p>}
                     </button>
                     <button
                       type="button"
