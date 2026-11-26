@@ -19,7 +19,7 @@ import {
   Paintbrush, Leaf, TreePine, Wind, X, Pencil, Check, Sun, Star, FileText, Camera, Link2,
   AlertTriangle, ChevronLeft, ChevronRight, Search, ArrowUpDown, BookOpen, Download,
   MoreVertical, RotateCcw, Plus, Minus, Menu, Store, ShoppingBag, Trash2, MapPin,
-  Image as ImageIcon, Loader2, MessageCircle, Lightbulb, Archive, Mic, Repeat
+  Image as ImageIcon, Loader2, MessageCircle, Lightbulb, Archive, Mic, Repeat, CalendarDays, Receipt, TrendingUp, TrendingDown
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -542,7 +542,7 @@ function Sheet({ title, subtitle, onClose, children, wide }) {
  * Left navigation. A slide-over drawer below `md`, a permanent sidebar above it.
  * Stores first, then Recipes; Import now lives inside the Recipes screen.
  */
-function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, onAddStore, onRecipes, recipesActive, recipeCount, onAssistant, onFavorites, favCount, favActive }) {
+function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, onAddStore, onRecipes, recipesActive, recipeCount, onAssistant, onFavorites, favCount, favActive, onPrices, pricesActive }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -600,7 +600,7 @@ function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, 
 
           {stores.map((store) => {
             const Icon = store.icon;
-            const on = !recipesActive && activeStoreId === store.id;
+            const on = !recipesActive && !pricesActive && activeStoreId === store.id;
             const count = counts[store.id] || 0;
             return (
               <button
@@ -666,6 +666,17 @@ function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, 
                   {favCount}
                 </span>
               )}
+
+          {onPrices && (
+            <button type="button" onClick={() => { onPrices(); onClose(); }} className={row(pricesActive)}>
+              <span className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-lg transition-transform duration-150 group-hover:scale-105", pricesActive ? "bg-emerald-50" : "bg-slate-200/70")}>
+                <TrendingUp size={15} className={pricesActive ? "text-emerald-600" : "text-slate-500"} />
+              </span>
+              <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", pricesActive ? "font-semibold text-slate-900" : "font-medium text-slate-600")}>
+                Prices
+              </span>
+            </button>
+          )}
             </button>
           )}
         </nav>
@@ -1295,7 +1306,7 @@ const usualsFor = (hist, onList) => {
       const every = t.length >= 2 ? (t[t.length - 1] - t[0]) / (t.length - 1) : null;
       const since = now - last;
       const due = every ? since >= every * 0.85 : since >= 7 * DAY;
-      return { name, label: u.label || name, qty: u.q || 1, section: u.s || "", n: u.n, every, since, due };
+      return { name, label: u.label || name, qty: u.q || 1, section: u.s || "", n: u.n, every, since, due, last, autoAt: u.a || 0 };
     })
     .sort((a, b) => (b.due - a.due) || (b.n - a.n));
 };
@@ -1305,7 +1316,7 @@ const fmtDays = (ms) => {
   return d <= 0 ? "today" : d === 1 ? "1 day" : d + " days";
 };
 
-function UsualsSheet({ storeName, usuals, onAdd, onForget, onClose }) {
+function UsualsSheet({ storeName, usuals, onAdd, onForget, onClose, restockOn, onRestockToggle }) {
   const [picked, setPicked] = useState(() => new Set(usuals.filter((u) => u.due).map((u) => u.name)));
   const toggle = (n) => setPicked((p) => { const x = new Set(p); x.has(n) ? x.delete(n) : x.add(n); return x; });
 
@@ -1331,6 +1342,12 @@ function UsualsSheet({ storeName, usuals, onAdd, onForget, onClose }) {
             </div>
           ))}
         </div>
+      )}
+      {onRestockToggle && (
+        <label className="mt-3 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-[12.5px] text-slate-600">
+          <input type="checkbox" checked={restockOn} onChange={(e) => onRestockToggle(e.target.checked)} />
+          Add usuals to the list by themselves when they're due
+        </label>
       )}
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onClose} className={BTN_GHOST}>Close</button>
@@ -1716,12 +1733,11 @@ function StoreEditorModal({ store, onSave, onDelete, onClose }) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /** Shrink a photo to a sensible size and return { base64, mediaType, preview }. */
-const prepareImage = (file) =>
+const prepareImage = (file, MAX = 1600) =>
   new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const MAX = 1600;
       const scale = Math.min(1, MAX / Math.max(img.width, img.height));
       const canvas = document.createElement("canvas");
       canvas.width = Math.round(img.width * scale);
@@ -2250,6 +2266,297 @@ function StarRating({ value = 0, onChange, size = 18 }) {
   );
 }
 
+/** "This week" dinners card: uncheck a meal to swap it for another. */
+function WeekPlanCard({ plan, settings, busy, error, getRecipe, onOpen, onSwap, onReplan, onSettings }) {
+  const [showSettings, setShowSettings] = useState(false);
+  const [ask, setAsk] = useState("");
+  if (!settings.on && !plan) return null;
+  const current = plan && plan.weekOf;
+  return (
+    <div className={cx(CARD, "mb-3 overflow-hidden")}>
+      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+        <CalendarDays size={16} className="text-indigo-600" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[13.5px] font-semibold text-slate-900">This week's dinners</div>
+          <div className="text-[11.5px] text-slate-400">
+            {busy === "plan" ? "Planning…" : current ? "On your Market Basket list · uncheck one to swap it" : "Not planned yet"}
+          </div>
+        </div>
+        <IconBtn icon={RotateCcw} size={14} title="Plan again" onClick={() => onReplan("")} />
+        <IconBtn icon={Pencil} size={13} title="Planner settings" onClick={() => setShowSettings((v) => !v)} />
+      </div>
+
+      {showSettings && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-[12.5px] text-slate-600">
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={settings.on} onChange={(e) => onSettings({ ...settings, on: e.target.checked })} />
+            Plan automatically each week
+          </label>
+          <label className="flex items-center gap-1.5">
+            Dinners:
+            <select value={settings.count} onChange={(e) => onSettings({ ...settings, count: parseInt(e.target.value) })}
+              className="rounded-md bg-white px-1.5 py-0.5 ring-1 ring-slate-200">
+              {[1, 2, 3, 4, 5, 6, 7].map((n) => <option key={n}>{n}</option>)}
+            </select>
+          </label>
+          <div className="flex w-full gap-2">
+            <input value={ask} onChange={(e) => setAsk(e.target.value)} placeholder='Optional: "one fish night, nothing spicy"'
+              className="min-w-0 flex-1 rounded-lg bg-white px-2.5 py-1.5 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <button type="button" disabled={!!busy} onClick={() => { onReplan(ask); setShowSettings(false); }} className={cx(BTN_PRIMARY, "shrink-0 px-3 py-1.5")}>Plan</button>
+          </div>
+        </div>
+      )}
+
+      <div className="px-2 py-1.5">
+        {(plan?.meals || []).map((m) => {
+          const r = getRecipe(m.id);
+          const swapping = busy === m.id;
+          return (
+            <div key={m.id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-slate-50">
+              {swapping ? <Loader2 size={18} className="shrink-0 animate-spin text-indigo-500" />
+                : <Checkbox checked onChange={() => onSwap(m.id)} shape="square" label={"Swap " + m.title + " for something else"} />}
+              <button type="button" onClick={() => r && onOpen(m.id)} className="min-w-0 flex-1 text-left">
+                <div className="truncate text-[14px] font-medium text-slate-800">{r?.title || m.title}</div>
+                <div className="flex items-center gap-1.5 text-[11.5px] text-slate-400">
+                  {r?.rating > 0 && <StarRating value={r.rating} size={10} />}
+                  <span className="truncate">{swapping ? "Finding something else…" : m.reason}</span>
+                </div>
+              </button>
+            </div>
+          );
+        })}
+        {busy === "plan" && <p className="flex items-center gap-2 px-2 py-2 text-[12.5px] text-slate-400"><Loader2 size={13} className="animate-spin" /> Picking dinners from your recipes…</p>}
+        {!busy && !(plan?.meals || []).length && (
+          <button type="button" onClick={() => onReplan("")} className="w-full px-2 py-2 text-left text-[13px] font-medium text-indigo-600">Plan this week now</button>
+        )}
+        {error && <p className="px-2 pb-1 text-[12px] text-red-600">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Price tracker: receipts in, price history per item out ── */
+
+const money = (v) => (v == null || isNaN(v) ? "—" : "$" + Number(v).toFixed(2));
+const shortDate = (iso) => {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
+
+/** Every tracked item with its price points, newest last. */
+const buildPriceSeries = (receipts) => {
+  const by = {};
+  (receipts || []).forEach((rc) => {
+    (rc.items || []).forEach((it) => {
+      const key = it.name.trim().toLowerCase();
+      const unit = it.unit === "lb" ? "lb" : "ea";
+      const each = it.unitPrice != null ? it.unitPrice : it.price != null && it.qty ? it.price / it.qty : null;
+      if (each == null) return;
+      (by[key] = by[key] || { name: it.name.trim(), unit, points: [] }).points.push({ date: rc.date, price: Math.round(each * 100) / 100, store: rc.store, receiptId: rc.id });
+    });
+  });
+  return Object.values(by).map((s) => {
+    s.points.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const last = s.points[s.points.length - 1];
+    const prev = s.points.length > 1 ? s.points[s.points.length - 2] : null;
+    const first = s.points[0];
+    return { ...s, last, prev, change: prev ? (last.price - prev.price) / prev.price : 0, sinceFirst: first !== last ? (last.price - first.price) / first.price : 0 };
+  });
+};
+
+function Sparkline({ points, w = 72, h = 22 }) {
+  if (points.length < 2) return <span className="text-[10.5px] text-slate-300">1 price</span>;
+  const vals = points.map((p) => p.price);
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const xy = vals.map((v, i) => [(i / (vals.length - 1)) * (w - 4) + 2, h - 3 - ((v - lo) / span) * (h - 6)]);
+  const up = vals[vals.length - 1] > vals[0];
+  return (
+    <svg width={w} height={h} className="shrink-0">
+      <polyline points={xy.map((p) => p.join(",")).join(" ")} fill="none" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round"
+        className={up ? "stroke-rose-500" : "stroke-emerald-500"} />
+      <circle cx={xy[xy.length - 1][0]} cy={xy[xy.length - 1][1]} r="2.2" className={up ? "fill-rose-500" : "fill-emerald-500"} />
+    </svg>
+  );
+}
+
+function PriceChart({ series }) {
+  const pts = series.points;
+  const W = 560, H = 220, L = 46, R = 12, T = 14, B = 30;
+  const vals = pts.map((p) => p.price);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (lo === hi) { lo = lo * 0.9; hi = hi * 1.1 || 1; }
+  const pad = (hi - lo) * 0.12; lo = Math.max(0, lo - pad); hi += pad;
+  const x = (i) => L + (pts.length === 1 ? (W - L - R) / 2 : (i / (pts.length - 1)) * (W - L - R));
+  const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const ticks = [0, 0.5, 1].map((f) => lo + f * (hi - lo));
+  const labelIdx = pts.length <= 6 ? pts.map((_, i) => i) : [0, Math.floor((pts.length - 1) / 2), pts.length - 1];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} className="stroke-slate-200" strokeDasharray="3 4" />
+          <text x={L - 6} y={y(t) + 4} textAnchor="end" className="fill-slate-400" fontSize="11">${t.toFixed(2)}</text>
+        </g>
+      ))}
+      {pts.length > 1 && (
+        <polyline points={pts.map((p, i) => x(i) + "," + y(p.price)).join(" ")} fill="none" strokeWidth="2.5" strokeLinejoin="round" className="stroke-indigo-500" />
+      )}
+      {pts.map((p, i) => (
+        <g key={i}>
+          <circle cx={x(i)} cy={y(p.price)} r="4" className="fill-white stroke-indigo-500" strokeWidth="2"><title>{shortDate(p.date)}: {money(p.price)}</title></circle>
+          {labelIdx.includes(i) && <text x={x(i)} y={H - 10} textAnchor={pts.length > 1 && i === pts.length - 1 ? "end" : pts.length > 1 && i === 0 ? "start" : "middle"} className="fill-slate-400" fontSize="11">{shortDate(p.date)}</text>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function PriceItemSheet({ series, onClose }) {
+  return (
+    <Sheet title={series.name} subtitle={"Price per " + series.unit + " · " + series.points.length + " receipt" + (series.points.length !== 1 ? "s" : "")} onClose={onClose} wide>
+      <PriceChart series={series} />
+      <div className="mt-3 flex flex-wrap gap-2 text-[12.5px]">
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">Now {money(series.last.price)}</span>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">Low {money(Math.min(...series.points.map((p) => p.price)))}</span>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">High {money(Math.max(...series.points.map((p) => p.price)))}</span>
+        {series.points.length > 1 && (
+          <span className={cx("rounded-full px-2.5 py-1 font-semibold", series.sinceFirst > 0 ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700")}>
+            {series.sinceFirst > 0 ? "▲" : "▼"} {Math.abs(series.sinceFirst * 100).toFixed(0)}% since {shortDate(series.points[0].date)}
+          </span>
+        )}
+      </div>
+      <table className="mt-4 w-full text-[13px]">
+        <thead><tr className="text-left text-[11px] uppercase tracking-wide text-slate-400"><th className="py-1">Date</th><th>Store</th><th className="text-right">Price</th></tr></thead>
+        <tbody>
+          {[...series.points].reverse().map((p, i) => (
+            <tr key={i} className="border-t border-slate-100"><td className="py-1.5">{shortDate(p.date)}</td><td className="text-slate-500">{p.store}</td><td className="text-right tabular-nums">{money(p.price)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </Sheet>
+  );
+}
+
+/** Photo(s) of a receipt → AI reads the lines → you check them → saved. */
+function ReceiptSheet({ knownNames, onSave, onClose }) {
+  const [images, setImages] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [draft, setDraft] = useState(null); // { store, date, total, items }
+  const [saving, setSaving] = useState(false);
+  const camRef = useRef(null), libRef = useRef(null);
+
+  const addFiles = async (files) => {
+    const list = Array.from(files || []).filter((f) => f.type.startsWith("image/"));
+    if (!list.length) return;
+    try { const prepared = await Promise.all(list.map((f) => prepareImage(f, 2400))); setImages((c) => [...c, ...prepared].slice(0, 6)); }
+    catch (e) { setError(e.message); }
+  };
+  const read = async () => {
+    setBusy(true); setError(null);
+    try {
+      const res = await fetch("/api/import", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "receipt", images: images.map(({ base64, mediaType }) => ({ base64, mediaType })), known: knownNames }),
+      });
+      let data = {}; try { data = await res.json(); } catch { /* ignore */ }
+      if (!res.ok) throw new Error(data.error || "Couldn't read the receipt (" + res.status + ")");
+      const today = new Date();
+      setDraft({
+        store: data.store || "Market Basket",
+        date: data.date || today.toISOString().slice(0, 10),
+        total: data.total,
+        items: data.items,
+      });
+    } catch (e) { setError(e.message); }
+    setBusy(false);
+  };
+  const setItem = (i, k, v) => setDraft((d) => ({ ...d, items: d.items.map((x, j) => (j === i ? { ...x, [k]: v } : x)) }));
+  const sum = draft ? draft.items.reduce((n, i) => n + (Number(i.price) || 0), 0) : 0;
+  const save = async () => {
+    setSaving(true); setError(null);
+    try {
+      await onSave({
+        id: "rc" + Date.now(), store: draft.store.trim(), date: draft.date, total: draft.total ?? Math.round(sum * 100) / 100, addedAt: Date.now(),
+        items: draft.items.filter((i) => String(i.name).trim()).map((i) => ({
+          name: String(i.name).trim(), raw: i.raw || "", qty: Number(i.qty) || 1, unit: i.unit === "lb" ? "lb" : "ea",
+          unitPrice: i.unitPrice === "" || i.unitPrice == null ? null : Number(i.unitPrice), price: Number(i.price) || 0,
+        })),
+      });
+    } catch (e) { setError(e.message || "Couldn't save."); setSaving(false); }
+  };
+
+  const cell = "w-full rounded-md bg-white px-1.5 py-1 text-[12.5px] ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  return (
+    <Sheet title={draft ? "Check the receipt" : "Add a receipt"} subtitle={draft ? draft.items.length + " items · fix anything misread, then save" : "Photograph the whole receipt — long ones in parts, top to bottom"} onClose={busy || saving ? () => {} : onClose} wide>
+      {!draft ? (
+        <>
+          <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+          <input ref={libRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+          {images.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {images.map((img, i) => (
+                <div key={i} className="relative">
+                  <img src={img.preview} alt={"Part " + (i + 1)} className="h-24 w-16 rounded-lg object-cover ring-1 ring-slate-200" />
+                  {!busy && <button type="button" onClick={() => setImages((c) => c.filter((_, j) => j !== i))} className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-slate-900 text-white"><X size={11} /></button>}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {isMobile && <button type="button" disabled={busy} onClick={() => camRef.current?.click()} className={cx(BTN_GHOST, "flex items-center gap-1.5")}><Camera size={14} /> Camera</button>}
+            <button type="button" disabled={busy} onClick={() => libRef.current?.click()} className={cx(BTN_GHOST, "flex items-center gap-1.5")}><ImageIcon size={14} /> {isMobile ? "Photos" : "Choose photos"}</button>
+            <div className="flex-1" />
+            <button type="button" disabled={!images.length || busy} onClick={read} className={cx(BTN_PRIMARY, "flex items-center gap-1.5")}>
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy ? "Reading…" : "Read receipt"}
+            </button>
+          </div>
+          <p className="mt-2 text-[12px] text-slate-400">{busy ? "Reading every line — about 20–40 seconds." : "Lay it flat in good light. Item names are matched to ones you've tracked before."}</p>
+        </>
+      ) : (
+        <>
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <Field label="Store"><input value={draft.store} onChange={(e) => setDraft((d) => ({ ...d, store: e.target.value }))} className={INPUT} /></Field>
+            <Field label="Date"><input type="date" value={draft.date} onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))} className={INPUT} /></Field>
+          </div>
+          <div className="max-h-[48vh] overflow-y-auto rounded-xl ring-1 ring-slate-200">
+            <table className="w-full text-[12.5px]">
+              <thead className="sticky top-0 bg-slate-50 text-left text-[10.5px] uppercase tracking-wide text-slate-400">
+                <tr><th className="px-2 py-1.5">Item</th><th className="w-14 px-1">Qty</th><th className="w-16 px-1">Each</th><th className="w-16 px-1">Total</th><th className="w-6" /></tr>
+              </thead>
+              <tbody>
+                {draft.items.map((it, i) => (
+                  <tr key={i} className={cx("border-t border-slate-100", it.unsure && "bg-amber-50")}>
+                    <td className="px-2 py-1">
+                      <input value={it.name} onChange={(e) => setItem(i, "name", e.target.value)} className={cell} />
+                      {it.raw && <div className="mt-0.5 truncate text-[10.5px] text-slate-400">{it.raw}{it.unsure ? " · check this" : ""}</div>}
+                    </td>
+                    <td className="px-1"><input value={it.qty} onChange={(e) => setItem(i, "qty", e.target.value)} className={cell} />{it.unit === "lb" && <div className="text-[10px] text-slate-400">lb</div>}</td>
+                    <td className="px-1"><input value={it.unitPrice ?? ""} onChange={(e) => setItem(i, "unitPrice", e.target.value)} className={cell} /></td>
+                    <td className="px-1"><input value={it.price} onChange={(e) => setItem(i, "price", e.target.value)} className={cell} /></td>
+                    <td><IconBtn icon={X} size={12} title="Not an item" onClick={() => setDraft((d) => ({ ...d, items: d.items.filter((_, j) => j !== i) }))} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[12px] text-slate-500">
+            Items add up to {money(sum)}{draft.total != null && Math.abs(sum - draft.total) > 0.05 ? " · receipt total " + money(draft.total) + " (tax and fees aren't items)" : ""}
+          </p>
+          <div className="mt-3 flex justify-end gap-2">
+            <button type="button" disabled={saving} onClick={() => setDraft(null)} className={BTN_GHOST}>Back</button>
+            <button type="button" disabled={saving || !draft.items.length} onClick={save} className={cx(BTN_PRIMARY, "flex items-center gap-1.5")}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save receipt
+            </button>
+          </div>
+        </>
+      )}
+      {error && <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-red-50 p-3 text-[13px] text-red-700"><AlertTriangle size={14} className="mt-0.5 shrink-0" /> {error}</p>}
+    </Sheet>
+  );
+}
+
 /* ── Assistant: chat that works the app through tools ── */
 
 /** One-line description of a tool step, shown in the chat as the assistant works. */
@@ -2680,6 +2987,8 @@ function AppMain() {
   useEffect(() => {
     if (!authReady) return;
     const unsub = onSnapshot(doc(db, "app", "mbSettings"), (snap) => {
+      usualsLoadedRef.current = true;
+      if (!snap.exists()) setMealPlan(null);
       if (snap.exists()) {
         const data = snap.data();
         if (data.aisleRules) {
@@ -2694,6 +3003,9 @@ function AppMain() {
         }
         setPantry(Array.isArray(data.pantry) ? data.pantry : []);
         setUsuals(data.usuals && typeof data.usuals === "object" ? data.usuals : {});
+        setRestockOn(data.restockOn !== false);
+        if (data.planSettings) setPlanSettings((p) => ({ ...p, ...data.planSettings }));
+        setMealPlan(data.mealPlan || null);
       }
     });
     return () => unsub();
@@ -3338,7 +3650,7 @@ function AppMain() {
   };
 
   /** Add parsed items to any store's list. entries: [{ name, qty, store, section }] */
-  const addEntries = (entries) => {
+  const addEntries = (entries, { record = true, note = "Added manually" } = {}) => {
     const byStore = {};
     entries.forEach((e) => { (byStore[e.store] = byStore[e.store] || []).push(e); });
     const stamp = Date.now();
@@ -3346,7 +3658,7 @@ function AppMain() {
 
     Object.entries(byStore).forEach(([sid, list]) => {
       if (sid === "mb") {
-        const added = list.map((e, i) => ({ key: "m" + stamp + "_" + i, text: label(e), recipe: "Added manually", manual: true }));
+        const added = list.map((e, i) => ({ key: "m" + stamp + "_" + i, text: label(e), recipe: note, manual: true }));
         const u = [...manualItems, ...added];
         setManualItems(u); saveShop({ manualItems: u });
         const rules = {};
@@ -3384,9 +3696,147 @@ function AppMain() {
         }));
         saveStore(sid, { items: [...st.items, ...added] });
       }
-      recordUsuals(sid, list);
+      if (record) recordUsuals(sid, list);
     });
   };
+
+  /* ── Restock nudges: a usual that's due goes on its list by itself, once per cycle ── */
+  const listNamesFor = (sid) => {
+    const st = navStores.find((x) => x.id === sid);
+    const items = sid === "mb" ? allShoppingItems.filter((i) => !checkedItems.has(i.key))
+      : sid === "target" ? targetItems.filter((i) => !targetChecked.has(i.key))
+        : sid === "lowes" ? lowesItems.filter((i) => !lowesChecked.has(i.key))
+          : st ? st.items.filter((i) => !st.checked.includes(i.key)) : [];
+    return new Set(items.map((i) => usualName(i.text)));
+  };
+  const [restockOn, setRestockOn] = useState(true);
+  const usualsLoadedRef = useRef(false);
+  const restockDoneRef = useRef(false);
+  useEffect(() => {
+    if (!authReady || !restockOn || restockDoneRef.current || !usualsLoadedRef.current || !shoppingLoaded.current) return;
+    const timer = setTimeout(() => {
+      if (restockDoneRef.current) return;
+      restockDoneRef.current = true;
+      const now = Date.now();
+      const added = [];
+      const marks = {};
+      Object.keys(usuals || {}).forEach((sid) => {
+        if (!navStores.some((x) => x.id === sid)) return;
+        const due = usualsFor(usuals[sid], listNamesFor(sid)).filter((u) => u.due && !(u.autoAt > u.last));
+        if (!due.length) return;
+        addEntries(due.map((u) => ({ name: u.label, qty: u.qty, store: sid, section: u.section })), { record: false, note: "Restock — usual" });
+        added.push(...due.map((u) => ({ sid, label: u.label })));
+        marks[sid] = due.map((u) => u.name);
+      });
+      if (!added.length) return;
+      // Remember they were auto-added so removing one doesn't make it come straight back.
+      setUsuals((prev) => {
+        const next = { ...prev };
+        Object.entries(marks).forEach(([sid, names]) => {
+          const mine = { ...(next[sid] || {}) };
+          names.forEach((n) => { if (mine[n]) mine[n] = { ...mine[n], a: now }; });
+          next[sid] = mine;
+          setDoc(doc(db, "app", "mbSettings"), { usuals: { [sid]: mine } }, { merge: true }).catch(() => {});
+        });
+        return next;
+      });
+      setRestockNote(added);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [authReady, restockOn, usuals, allShoppingItems, targetItems, lowesItems, navStores]);
+  const [restockNote, setRestockNote] = useState(null);
+  /* ── Weekly meal planner: the week's dinners are picked the first time the app is
+     opened each week (weeks start Sunday) and put on the Market Basket list.
+     Unchecking a meal swaps in a different one. Stored in app/mbSettings.mealPlan. ── */
+  const [planSettings, setPlanSettings] = useState({ on: true, count: 2 });
+  const [mealPlan, setMealPlan] = useState(undefined); // undefined = not loaded yet
+  const [planBusy, setPlanBusy] = useState(null);       // null | "plan" | recipeId being swapped
+  const [planError, setPlanError] = useState(null);
+  const planTriedRef = useRef(false);
+
+  const weekStart = (d = new Date()) => {
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay());
+    return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0");
+  };
+  // mealPlan is one whole value, so write it with updateDoc (setDoc+merge would merge stale meal maps).
+  const writePlan = (plan) => {
+    setMealPlan(plan);
+    updateDoc(doc(db, "app", "mbSettings"), { mealPlan: plan })
+      .catch(() => setDoc(doc(db, "app", "mbSettings"), { mealPlan: plan }, { merge: true }));
+  };
+  const savePlanSettings = (next) => {
+    setPlanSettings(next);
+    setDoc(doc(db, "app", "mbSettings"), { planSettings: next }, { merge: true }).catch(() => {});
+  };
+
+  const pickMeals = async ({ count, exclude = [], keep = [], recent = [], request = "" }) => {
+    const res = await fetch("/api/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "plan", count, exclude, keep, recent, request,
+        recipes: recipes.map((r) => ({ id: r.id, title: r.title, categories: catsOf(r), rating: r.rating || 0, favorite: !!r.favorite, ingredients: r.ingredients })),
+      }),
+    });
+    let data = {};
+    try { data = await res.json(); } catch { /* ignore */ }
+    if (!res.ok) throw new Error(data.error || "Planner unavailable (" + res.status + ")");
+    return data.meals || [];
+  };
+
+  /** Make (or remake) this week's plan and put the meals on the list. */
+  const planWeek = async (request = "") => {
+    if (planBusy) return;
+    setPlanBusy("plan"); setPlanError(null);
+    try {
+      const prev = mealPlan || {};
+      const history = [...(prev.history || []), ...((prev.meals || []).map((m) => m.title))].slice(-16);
+      const sameWeek = prev.weekOf === weekStart();
+      const picks = await pickMeals({ count: planSettings.count, recent: history, request });
+      // Take last plan's meals off the list (they were put there by the planner).
+      (prev.meals || []).forEach((m) => { if (!picks.some((p) => p.id === m.id)) setRecipeOnList(m.id, false); });
+      const meals = picks.map((p) => ({ id: p.id, title: recipes.find((r) => r.id === p.id)?.title || "", reason: p.reason }));
+      meals.forEach((m) => setRecipeOnList(m.id, true));
+      writePlan({ weekOf: weekStart(), meals, skipped: sameWeek ? prev.skipped || [] : [], history, madeAt: Date.now(), fresh: true });
+    } catch (e) { setPlanError(e.message); }
+    setPlanBusy(null);
+  };
+
+  /** Unchecked a planned meal: take it off the list and swap in something else. */
+  const swapMeal = async (id) => {
+    if (planBusy || !mealPlan) return;
+    setPlanBusy(id); setPlanError(null);
+    setRecipeOnList(id, false);
+    try {
+      const skipped = [...new Set([...(mealPlan.skipped || []), id])];
+      const others = mealPlan.meals.filter((m) => m.id !== id);
+      const [pick] = await pickMeals({
+        count: 1,
+        exclude: [...skipped, ...others.map((m) => m.id)],
+        keep: others.map((m) => m.title),
+        recent: mealPlan.history || [],
+      });
+      const meals = mealPlan.meals.map((m) => (m.id === id
+        ? { id: pick.id, title: recipes.find((r) => r.id === pick.id)?.title || "", reason: pick.reason }
+        : m));
+      setRecipeOnList(pick.id, true);
+      writePlan({ ...mealPlan, meals, skipped });
+    } catch (e) {
+      setPlanError(e.message);
+      writePlan({ ...mealPlan, meals: mealPlan.meals.filter((m) => m.id !== id), skipped: [...(mealPlan.skipped || []), id] });
+    }
+    setPlanBusy(null);
+  };
+
+  // First open of a new week: plan it automatically.
+  useEffect(() => {
+    if (loading || mealPlan === undefined || !planSettings.on || planTriedRef.current) return;
+    if (recipes.length < 3) return;
+    if (mealPlan && mealPlan.weekOf === weekStart()) return;
+    planTriedRef.current = true;
+    planWeek();
+  }, [loading, mealPlan, planSettings.on, recipes.length]);
+
 
   const storeLabel = (sid) => navStores.find((x) => x.id === sid)?.label || sid;
 
@@ -3672,6 +4122,43 @@ function AppMain() {
     runCategoryPass(false);
   }, [loading, view, recipes]);
 
+  /* ── Price tracker data: app/prices { receipts: [...] } ── */
+  const [receipts, setReceipts] = useState([]);
+  const [pricesError, setPricesError] = useState(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [priceItem, setPriceItem] = useState(null);
+  const [priceSearch, setPriceSearch] = useState("");
+  const [priceSort, setPriceSort] = useState("recent"); // recent | change | name
+  useEffect(() => {
+    if (!authReady) return;
+    const unsub = onSnapshot(
+      doc(db, "app", "prices"),
+      (snap) => { setReceipts(snap.exists() && Array.isArray(snap.data().receipts) ? snap.data().receipts : []); setPricesError(null); },
+      (e) => setPricesError(e.code || e.message)
+    );
+    return () => unsub();
+  }, [authReady]);
+  const priceSeries = useMemo(() => buildPriceSeries(receipts), [receipts]);
+  const saveReceipt = async (rc) => {
+    const next = [...receipts, rc].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    await setDoc(doc(db, "app", "prices"), { receipts: next }, { merge: true });
+    setReceiptOpen(false);
+  };
+  const deleteReceipt = async (id) => {
+    const next = receipts.filter((r) => r.id !== id);
+    await setDoc(doc(db, "app", "prices"), { receipts: next }, { merge: true });
+  };
+  const exportPricesCsv = () => {
+    const rows = [["Date", "Store", "Item", "Qty", "Unit", "Unit price", "Line total", "Receipt text"]];
+    receipts.forEach((rc) => rc.items.forEach((it) => rows.push([rc.date, rc.store, it.name, it.qty, it.unit, it.unitPrice ?? "", it.price, it.raw || ""])));
+    const csv = rows.map((r) => r.map((v) => '"' + String(v ?? "").replace(/"/g, '""') + '"').join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "dougslist-prices.csv";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
   /* ── Assistant: the agent loop. The worker decides; these functions act. ── */
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [agentMsgs, setAgentMsgs] = useState([]);
@@ -3881,6 +4368,8 @@ function AppMain() {
       onFavorites={() => { setView("recipes"); setSelectedId(null); setActiveTab("Favorites"); }}
       favCount={recipes.filter((r) => r.favorite).length}
       favActive={view === "recipes" && activeTab === "Favorites"}
+      onPrices={() => { setView("prices"); setSelectedId(null); }}
+      pricesActive={view === "prices"}
     />
     </>
   );
@@ -4255,6 +4744,109 @@ function AppMain() {
   /* ═════════════════════════════════════════════════════════════════════════
      Screen: recipes (with Import folded in)
      ═════════════════════════════════════════════════════════════════════════ */
+  if (view === "prices") {
+    const q = priceSearch.toLowerCase().trim();
+    const list = priceSeries
+      .filter((x) => !q || x.name.toLowerCase().includes(q))
+      .sort((a, b) => priceSort === "name" ? a.name.localeCompare(b.name)
+        : priceSort === "change" ? Math.abs(b.sinceFirst) - Math.abs(a.sinceFirst)
+          : (b.last.date || "").localeCompare(a.last.date || "") || a.name.localeCompare(b.name));
+    const ups = priceSeries.filter((x) => x.points.length > 1 && x.change > 0.001).length;
+    const downs = priceSeries.filter((x) => x.points.length > 1 && x.change < -0.001).length;
+    return (
+      <div className="min-h-dvh bg-slate-50">
+        {nav}
+        {receiptOpen && <ReceiptSheet knownNames={priceSeries.map((x) => x.name)} onSave={saveReceipt} onClose={() => setReceiptOpen(false)} />}
+        {priceItem && <PriceItemSheet series={priceItem} onClose={() => setPriceItem(null)} />}
+        <div className="md:pl-64">
+          <AppHeader
+            title="Prices"
+            subtitle={receipts.length + " receipt" + (receipts.length !== 1 ? "s" : "") + " · " + priceSeries.length + " items tracked"}
+            onMenu={() => setNavOpen(true)}
+            right={
+              <div className="flex items-center gap-1.5">
+                {receipts.length > 0 && <IconBtn icon={Download} size={15} title="Export to spreadsheet (CSV)" onClick={exportPricesCsv} />}
+                <button type="button" onClick={() => setReceiptOpen(true)}
+                  className="flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1.5 text-[12.5px] font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-95">
+                  <Receipt size={14} /> Add receipt
+                </button>
+              </div>
+            }
+          >
+            {priceSeries.length > 0 && (
+              <div className="flex items-center gap-2 px-4 pb-2.5">
+                <div className="relative min-w-0 flex-1">
+                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input value={priceSearch} onChange={(e) => setPriceSearch(e.target.value)} placeholder="Find an item…"
+                    className="w-full rounded-full bg-slate-100 py-2 pl-9 pr-3 text-[14px] focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <select value={priceSort} onChange={(e) => setPriceSort(e.target.value)} className="rounded-full bg-slate-100 px-3 py-2 text-[12.5px] text-slate-600">
+                  <option value="recent">Recently bought</option>
+                  <option value="change">Biggest change</option>
+                  <option value="name">A–Z</option>
+                </select>
+              </div>
+            )}
+          </AppHeader>
+
+          <main className="mx-auto max-w-2xl px-4 pb-16 pt-3">
+            {pricesError && (
+              <div className="mb-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-800 ring-1 ring-amber-200">
+                <AlertTriangle size={14} className="mt-px shrink-0" />
+                <span>Prices can't be read or saved ({pricesError}). Your Firestore rules may need to allow the <code className="font-mono">app/prices</code> document.</span>
+              </div>
+            )}
+
+            {!priceSeries.length ? (
+              <EmptyState icon={Receipt} title="No receipts yet" hint="Tap Add receipt after a shop. Each week's prices build a history for every item, with a chart." />
+            ) : (
+              <>
+                <div className="mb-3 grid grid-cols-3 gap-2">
+                  <div className={cx(CARD, "px-3 py-2.5")}><div className="text-[11px] text-slate-400">Items tracked</div><div className="text-[18px] font-bold text-slate-900">{priceSeries.length}</div></div>
+                  <div className={cx(CARD, "px-3 py-2.5")}><div className="text-[11px] text-slate-400">Went up last time</div><div className="text-[18px] font-bold text-rose-600">{ups}</div></div>
+                  <div className={cx(CARD, "px-3 py-2.5")}><div className="text-[11px] text-slate-400">Went down</div><div className="text-[18px] font-bold text-emerald-600">{downs}</div></div>
+                </div>
+
+                <div className={cx(CARD, "overflow-hidden")}>
+                  <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-slate-100 bg-slate-50 px-3.5 py-2 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">
+                    <span>Item</span><span className="w-[72px]">Trend</span><span className="w-14 text-right">Now</span><span className="w-14 text-right">Change</span>
+                  </div>
+                  {list.map((x) => (
+                    <button key={x.name} type="button" onClick={() => setPriceItem(x)}
+                      className="grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-slate-100 px-3.5 py-2.5 text-left last:border-0 hover:bg-slate-50">
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px] font-medium text-slate-800">{x.name}</span>
+                        <span className="block text-[11px] text-slate-400">{shortDate(x.last.date)} · {x.points.length}× · per {x.unit}</span>
+                      </span>
+                      <Sparkline points={x.points} />
+                      <span className="w-14 text-right text-[13.5px] font-semibold tabular-nums text-slate-900">{money(x.last.price)}</span>
+                      <span className={cx("w-14 text-right text-[12px] font-semibold tabular-nums",
+                        x.points.length < 2 || Math.abs(x.change) < 0.001 ? "text-slate-300" : x.change > 0 ? "text-rose-600" : "text-emerald-600")}>
+                        {x.points.length < 2 || Math.abs(x.change) < 0.001 ? "—" : (x.change > 0 ? "▲" : "▼") + Math.abs(x.change * 100).toFixed(0) + "%"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <h2 className={cx(LABEL_SM, "mb-2 mt-6")}>Receipts</h2>
+                {[...receipts].reverse().map((rc) => (
+                  <div key={rc.id} className={cx(CARD, "mb-1.5 flex items-center gap-3 px-3.5 py-2.5")}>
+                    <Receipt size={16} className="shrink-0 text-slate-400" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13.5px] font-medium text-slate-800">{rc.store} · {shortDate(rc.date)}</div>
+                      <div className="text-[11.5px] text-slate-400">{rc.items.length} items · {money(rc.total)}</div>
+                    </div>
+                    <IconBtn icon={Trash2} size={13} title="Delete this receipt" onClick={() => { if (window.confirm("Delete the " + rc.store + " receipt from " + shortDate(rc.date) + "?")) deleteReceipt(rc.id); }} />
+                  </div>
+                ))}
+              </>
+            )}
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   if (view === "recipes") {
     return (
       <div className="min-h-dvh bg-slate-50">
@@ -4355,6 +4947,19 @@ function AppMain() {
 
           <main className="mx-auto max-w-2xl px-4 pb-16 pt-3">
 
+            {!searchWords.length && !minRating && activeTab === "All" && (
+              <WeekPlanCard
+                plan={mealPlan && mealPlan.weekOf === weekStart() ? mealPlan : null}
+                settings={planSettings}
+                busy={planBusy}
+                error={planError}
+                getRecipe={(id) => recipes.find((r) => r.id === id)}
+                onOpen={(id) => setSelectedId(id)}
+                onSwap={swapMeal}
+                onReplan={(req) => planWeek(req)}
+                onSettings={savePlanSettings}
+              />
+            )}
             {catPass && (
               <div className={cx(
                 "mb-2 flex items-start gap-2 rounded-xl px-3 py-2 text-[12.5px] ring-1",
@@ -4625,6 +5230,17 @@ function AppMain() {
             </div>
           )}
 
+          {restockNote && restockNote.some((x) => x.sid === store.id) && (
+            <div className="mb-3 flex items-start gap-2.5 rounded-xl bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-900 ring-1 ring-emerald-100">
+              <Repeat size={15} className="mt-0.5 shrink-0 text-emerald-600" />
+              <span className="min-w-0 flex-1">
+                <b>Restocked your usuals:</b> {restockNote.filter((x) => x.sid === store.id).map((x) => x.label).join(", ")}
+                <span className="block text-[11.5px] text-emerald-700/80">They were due. Tap × on any you don't need.</span>
+              </span>
+              <IconBtn icon={X} size={13} title="Dismiss" onClick={() => setRestockNote((n) => (n || []).filter((x) => x.sid !== store.id))} />
+            </div>
+          )}
+
           {dueUsuals.length > 0 && (
             <button
               type="button"
@@ -4808,6 +5424,8 @@ function AppMain() {
             showToast("Added " + list.length + " usual" + (list.length !== 1 ? "s" : "") + " to " + store.label);
           }}
           onClose={() => setUsualsOpen(false)}
+          restockOn={restockOn}
+          onRestockToggle={(v) => { setRestockOn(v); setDoc(doc(db, "app", "mbSettings"), { restockOn: v }, { merge: true }).catch(() => {}); }}
         />
       )}
 

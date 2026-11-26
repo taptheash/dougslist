@@ -527,6 +527,95 @@ export async function onRequestPost({ request, env }) {
       return json({ content: data.content || [], stop_reason: data.stop_reason });
     }
 
+    // ── Weekly meal plan: pick dinners from the saved recipes ─────────────
+    if (body.mode === "plan") {
+      const recipes = (Array.isArray(body.recipes) ? body.recipes : []).slice(0, 400).map((r) => ({
+        id: String(r.id), title: String(r.title || "").slice(0, 120),
+        categories: (r.categories || []).slice(0, 4), rating: r.rating || 0, favorite: !!r.favorite,
+        ingredients: (r.ingredients || []).slice(0, 8).map((x) => String(x).slice(0, 60)),
+      }));
+      const exclude = new Set((body.exclude || []).map(String));
+      const pool = recipes.filter((r) => !exclude.has(r.id));
+      const count = Math.min(7, Math.max(1, parseInt(body.count) || 2));
+      if (!pool.length) return json({ error: "No other saved recipes to choose from. Add a few more, or use Ideas." }, 422);
+      const out = await callTool(env, {
+        system: `You plan weeknight dinners for a household from their saved recipes. Pick main dishes (not desserts, drinks, sides or sauces on their own). Favor recipes they rated 4-5 stars and favorites, but mix in others for variety. Vary the main protein and style across the picks, and avoid anything they had in recent weeks. Keep it practical for weeknights.\n\nAbout this household:\n${HOUSEHOLD}`,
+        tool: {
+          name: "pick_meals",
+          description: "The chosen dinners, best first.",
+          input_schema: { type: "object", properties: { meals: { type: "array", items: { type: "object",
+            properties: { id: { type: "string" }, reason: { type: "string", description: "Under 12 words: why this one this week." } },
+            required: ["id", "reason"] } } }, required: ["meals"] },
+        },
+        content:
+          `Pick ${count} dinner${count > 1 ? "s" : ""}.` +
+          (body.request ? `\nRequest: ${String(body.request).slice(0, 300)}` : "") +
+          (Array.isArray(body.recent) && body.recent.length ? `\nHad recently (avoid): ${body.recent.slice(-20).join("; ")}` : "") +
+          (Array.isArray(body.keep) && body.keep.length ? `\nAlready planned this week (pick something different): ${body.keep.join("; ")}` : "") +
+          `\n\nSaved recipes:\n${JSON.stringify(pool)}`,
+        maxTokens: 1500,
+      });
+      const ids = new Set(pool.map((r) => r.id));
+      const seen = new Set();
+      const meals = (out?.meals || [])
+        .filter((m) => ids.has(String(m.id)) && !seen.has(String(m.id)) && seen.add(String(m.id)))
+        .slice(0, count)
+        .map((m) => ({ id: String(m.id), reason: String(m.reason || "").slice(0, 120) }));
+      if (!meals.length) return json({ error: "Couldn't pick meals this time. Try again." }, 502);
+      return json({ meals });
+    }
+
+    // ── Receipt: read prices off a grocery receipt ────────────────────────
+    if (body.mode === "receipt") {
+      const images = (Array.isArray(body.images) ? body.images : []).slice(0, 6).filter((i) => i?.base64);
+      if (!images.length) return json({ error: "Add a photo of the receipt." }, 400);
+      const known = (Array.isArray(body.known) ? body.known : []).slice(0, 500).map((n) => String(n).slice(0, 60));
+      const content = images.map((img) => ({ type: "image", source: { type: "base64", media_type: img.mediaType || "image/jpeg", data: img.base64 } }));
+      content.push({ type: "text", text:
+        "Read this grocery receipt (several photos are parts of one long receipt, in order)." +
+        (known.length ? "\n\nItem names already tracked — reuse the exact name when it's the same product:\n" + known.join("\n") : "") });
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: env.IMPORT_MODEL_VISION || MODEL_VISION, // reading small, faded receipt print: the bigger model
+          max_tokens: 6000,
+          system: `You read grocery receipts for a household price tracker. Extract every purchased product line. For each: a clean, consistent product name a person would recognize ("Whole Milk, 1 gal", "Bananas", "Market Basket Large Eggs, dozen"), expanding store abbreviations; the raw receipt text; quantity (or weight in lb for priced-by-weight items, with unit "lb"); unit price; and line total. Skip subtotals, tax, deposits, bag fees, coupons summary lines and payment lines, but apply a discount printed directly under an item to that item's line total. Use the receipt's store name and date (YYYY-MM-DD). If a value is unreadable, make your best guess and set unsure true. Always answer by calling save_receipt.`,
+          tools: [{
+            name: "save_receipt",
+            description: "Save the receipt's line items.",
+            input_schema: { type: "object", properties: {
+              store: { type: "string" }, date: { type: "string", description: "YYYY-MM-DD" }, total: { type: "number" },
+              items: { type: "array", items: { type: "object", properties: {
+                name: { type: "string" }, raw: { type: "string" }, qty: { type: "number" }, unit: { type: "string", description: "'ea' or 'lb'" },
+                unit_price: { type: "number" }, price: { type: "number", description: "Line total paid." }, unsure: { type: "boolean" },
+              }, required: ["name", "qty", "unit_price", "price"] } },
+            }, required: ["items"] },
+          }],
+          tool_choice: { type: "auto" },
+          messages: [{ role: "user", content }],
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        return json({ error: `AI service error ${res.status}${detail ? ": " + detail.slice(0, 200) : ""}` }, 502);
+      }
+      const data = await res.json();
+      const r = data.content?.find((b) => b.type === "tool_use" && b.name === "save_receipt")?.input;
+      if (!r?.items?.length) return json({ error: "Couldn't read any items. Try a sharper, flatter photo in good light." }, 422);
+      const num = (v) => (typeof v === "number" && isFinite(v) ? Math.round(v * 100) / 100 : null);
+      return json({
+        store: String(r.store || "").trim(),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(r.date || "") ? r.date : "",
+        total: num(r.total),
+        items: r.items.map((i) => ({
+          name: String(i.name || i.raw || "").trim(), raw: String(i.raw || "").trim(),
+          qty: num(i.qty) || 1, unit: i.unit === "lb" ? "lb" : "ea",
+          unitPrice: num(i.unit_price), price: num(i.price), unsure: !!i.unsure,
+        })).filter((i) => i.name && i.price != null),
+      });
+    }
+
     // ── One-time: give older recipes their extra categories ───────────────
     if (body.mode === "categorize") {
       const list = (Array.isArray(body.recipes) ? body.recipes : []).slice(0, 30).map((r) => ({
