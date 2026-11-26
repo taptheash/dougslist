@@ -2610,6 +2610,8 @@ const describeStep = (name, input = {}, recipeTitle, storeName = (x) => x) => {
     case "get_usuals": return "Checked your " + storeName(input.store) + " usuals";
     case "get_pantry": return "Checked your pantry staples";
     case "show_recipes": return null;
+    case "get_store_sections": return null;
+    case "set_item_location": return "Remembered where " + (input.item || "that item") + " goes at " + storeName(input.store);
     case "rate_recipe": return "Rated " + t(input.id) + " " + "★".repeat(input.rating || 0);
     default: return name;
   }
@@ -2646,6 +2648,7 @@ function AssistantSheet({ messages, busy, error, onSend, onReset, onClose, recip
     "We're having 8 people Saturday — make the fish chowder and something for dessert",
     "What usuals am I due for? Add them",
     "Show me my 4-star fish recipes",
+    "Pecans are in aisle 7, not chips",
   ];
 
   return (
@@ -2962,6 +2965,7 @@ function AppMain() {
   const [aisleRules, setAisleRules] = useState({});
   const [rulesOpen, setRulesOpen] = useState(false);
   const [pantry, setPantry] = useState([]);
+  const [storeRules, setStoreRules] = useState({}); // { target|lowes|customId: { keyword: sectionKey } }
   const [pantryOpen, setPantryOpen] = useState(false);
   const [aisleEditorItem, setAisleEditorItem] = useState(null);
 
@@ -3039,6 +3043,7 @@ function AppMain() {
         setPantry(Array.isArray(data.pantry) ? data.pantry : []);
         setUsuals(data.usuals && typeof data.usuals === "object" ? data.usuals : {});
         setRestockOn(data.restockOn !== false);
+        setStoreRules(data.storeRules && typeof data.storeRules === "object" ? data.storeRules : {});
         if (data.planSettings) setPlanSettings((p) => ({ ...p, ...data.planSettings }));
         setMealPlan(data.mealPlan || null);
       }
@@ -3183,6 +3188,14 @@ function AppMain() {
     if (pendingStoreRef.current === storeTab) return;
     setStoreTab("mb");
   }, [navStores, storeTab, view]);
+
+  /** A remembered spot for an item at Target, Lowe's or a custom store (learned from you). */
+  const storeRuleFor = (sid, text) => {
+    const lower = String(text).toLowerCase();
+    const rules = storeRules[sid] || {};
+    const hit = Object.keys(rules).filter((k) => lower.includes(k)).sort((a, b) => b.length - a.length)[0];
+    return hit ? rules[hit] : null;
+  };
 
   /* ── Classification with permanent aisle rules ──────────────────────────── */
   const classifyWithRules = (text) => {
@@ -3708,7 +3721,7 @@ function AppMain() {
         const added = list.map((e, i) => ({
           key: (sid === "target" ? "t" : "l") + stamp + "_" + i,
           text: label(e),
-          category: cats.some((c) => c.key === e.section && c.key !== "other") ? e.section : cls(e.name),
+          category: storeRuleFor(sid, e.name) || (cats.some((c) => c.key === e.section && c.key !== "other") ? e.section : cls(e.name)),
         }));
         if (sid === "target") {
           const u = [...targetItems, ...added];
@@ -3725,7 +3738,7 @@ function AppMain() {
         const added = list.map((e, i) => ({
           key: "c" + stamp + "_" + i,
           text: label(e),
-          sectionKey: st.sections.some((x) => x.key === e.section) ? e.section : null,
+          sectionKey: storeRuleFor(sid, e.name) || (st.sections.some((x) => x.key === e.section) ? e.section : null),
         }));
         saveStore(sid, { items: [...st.items, ...added] });
       }
@@ -4218,6 +4231,36 @@ function AppMain() {
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
 
+  /** "That's actually in aisle 7": remember it for the store and move it if it's on the list. */
+  const setItemLocation = (sid, item, section) => {
+    const st = navStores.find((x) => x.id === sid);
+    if (!st) return { error: "Unknown store id." };
+    const secs = sectionsOf(st);
+    const sec = secs.find((x) => x.key === section);
+    if (!sec) return { error: "Unknown section for that store. Call get_store_sections first." };
+    const kw = (parseAmount(String(item)).name || String(item)).replace(/\s+/g, " ").trim().toLowerCase();
+    if (!kw || isVagueName(kw)) return { error: "That item name is too vague to remember." };
+    if (sid === "mb") {
+      setAisleRules((prev) => ({ ...prev, [kw]: section }));
+      setDoc(doc(db, "app", "mbSettings"), { aisleRules: { [kw]: section } }, { merge: true });
+    } else {
+      setStoreRules((prev) => ({ ...prev, [sid]: { ...(prev[sid] || {}), [kw]: section } }));
+      setDoc(doc(db, "app", "mbSettings"), { storeRules: { [sid]: { [kw]: section } } }, { merge: true });
+      const hits = (i) => i.text.toLowerCase().includes(kw);
+      if (sid === "target" || sid === "lowes") {
+        const setFn = sid === "target" ? setTargetItems : setLowesItems;
+        setFn((prev) => {
+          const u = prev.map((i) => (hits(i) ? { ...i, category: section } : i));
+          setDoc(doc(db, "app", sid), { items: u }, { merge: true });
+          return u;
+        });
+      } else {
+        saveStore(sid, { items: st.items.map((i) => (hits(i) ? { ...i, sectionKey: section } : i)) });
+      }
+    }
+    return { store: st.label, item: kw, now: stripEmoji(sec.label), remembered: true };
+  };
+
   /* ── Assistant: the agent loop. The worker decides; these functions act. ── */
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [agentMsgs, setAgentMsgs] = useState([]);
@@ -4229,7 +4272,7 @@ function AppMain() {
   agentRef.current = {
     recipes, checkedIds, checkedItems, allShoppingItems, skippedStaples, pantry, usuals,
     targetItems, targetChecked, lowesItems, lowesChecked, navStores,
-    addEntries, setServings, saveRecipesToFirestore, setRecipeOnList,
+    addEntries, setServings, saveRecipesToFirestore, setRecipeOnList, setItemLocation, sectionsOf,
   };
   const recipeTitle = (id) => agentRef.current.recipes.find((r) => r.id === id)?.title;
 
@@ -4329,6 +4372,13 @@ function AppMain() {
         if (!items) return { error: "Unknown store id." };
         return { store: input.store, items, ...(input.store === "mb" ? { skippedPantryStaples: A.skippedStaples } : {}) };
       }
+      case "get_store_sections": {
+        const st = A.navStores.find((x) => x.id === input.store);
+        if (!st) return { error: "Unknown store id." };
+        return { store: st.label, sections: A.sectionsOf(st).map((x) => ({ key: x.key, label: stripEmoji(x.label) })) };
+      }
+      case "set_item_location":
+        return A.setItemLocation(input.store, input.item, input.section);
       case "show_recipes": {
         const found = (input.ids || []).filter((id) => findR(id));
         return { shown: found.length, missing: (input.ids || []).length - found.length };

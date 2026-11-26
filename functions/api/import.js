@@ -247,6 +247,14 @@ const AGENT_TOOLS = [
       required: ["name", "qty", "store"] } } }, required: ["items"] } },
   { name: "get_list", description: "See what's currently on a store's list (not yet checked off).",
     input_schema: { type: "object", properties: { store: { type: "string", description: "Store id." } }, required: ["store"] } },
+  { name: "get_store_sections", description: "List a store's aisles/sections (key and label, e.g. Market Basket 'spices' = 'Aisle 7 — Spices / Baking / Coffee').",
+    input_schema: { type: "object", properties: { store: { type: "string", description: "Store id." } }, required: ["store"] } },
+  { name: "set_item_location", description: "Remember where an item really is in a store, so it's filed there from now on (and move it if it's on the list now). Use when the user says an item is in the wrong aisle or tells you where it is.",
+    input_schema: { type: "object", properties: {
+      store: { type: "string", description: "Store id." },
+      item: { type: "string", description: "The item name as it appears on the list, without the quantity (e.g. 'pecans', 'diced tomatoes')." },
+      section: { type: "string", description: "Section key from get_store_sections." },
+    }, required: ["store", "item", "section"] } },
   { name: "get_pantry", description: "The household's pantry staples (always on hand, kept off the list).",
     input_schema: { type: "object", properties: {} } },
   { name: "get_usuals", description: "Items the household buys regularly at a store, with which ones are due.",
@@ -257,6 +265,7 @@ const agentSystem = (ctx) => `You are the assistant inside Doug's List, a househ
 
 How to work
 - Ratings are the household's own 1-5 stars. "A 4 star fish recipe" means rating 4 or higher (min_rating 4) in Fish & Seafood, searching by category and fish words. When you find or recommend saved recipes, call show_recipes so they can tap straight to them; if nothing meets the rating, say so and show the closest ones.
+- Where things are: if the user says an item is in the wrong aisle or tells you where it's found ("pecans are in aisle 7", "eggs are with the dairy"), call get_store_sections for that store (Market Basket if not named), match their description to a section, and call set_item_location. Confirm what you changed ("Pecans → Aisle 7, Spices / Baking / Coffee"). If several items are mentioned, do each.
 - Look before you act: search the saved recipes before writing a new one, and check a list before adding duplicates.
 - If the user wants a dish that isn't saved, write a reliable, well-tested version and save it with create_recipe (same formatting as the rest of the collection). Then use it like any other recipe.
 - When the user gives a head count, set_servings first, then add_recipe_to_list, so list amounts match.
