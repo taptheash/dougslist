@@ -3246,14 +3246,12 @@ function AppMain() {
 
   const total = allShoppingItems.length;
   const activeSections = STORE_SECTIONS.filter((s) => grouped[s.key]?.some((i) => !checkedItems.has(i.key)));
-  /* Completed rows, alphabetized by item name (leading quantity ignored). */
+  /* Completed rows, most recently checked first. checkedItems keeps the order things were
+     checked in (re-checking moves an item to the end), and it's saved in that order. */
+  const checkOrder = new Map([...checkedItems].map((k, i) => [k, i]));
   const completedItems = allShoppingItems
     .filter((i) => checkedItems.has(i.key))
-    .sort((a, b) => {
-      const an = (parseAmount(a.text).name || a.text).toLowerCase();
-      const bn = (parseAmount(b.text).name || b.text).toLowerCase();
-      return an.localeCompare(bn) || a.text.localeCompare(b.text);
-    });
+    .sort((a, b) => (checkOrder.get(b.key) ?? -1) - (checkOrder.get(a.key) ?? -1));
   /* Progress = items checked off this trip / (those + rows still active).
      Starts at 0/N, climbs to N/N, then drops to 0/0 once nothing is left.
      Items checked on a previous trip are not counted. Combined rows count
