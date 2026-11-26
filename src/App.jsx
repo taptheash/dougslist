@@ -4798,7 +4798,15 @@ function AppMain() {
             )}
 
             {!priceSeries.length ? (
-              <EmptyState icon={Receipt} title="No receipts yet" hint="Tap Add receipt after a shop. Each week's prices build a history for every item, with a chart." />
+              <div className="mt-8 flex flex-col items-center text-center">
+                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50"><Receipt size={26} className="text-emerald-600" /></div>
+                <p className="mt-3 text-[15px] font-semibold text-slate-800">No receipts yet</p>
+                <p className="mt-1 max-w-xs text-[13px] text-slate-500">After a shop, photograph the receipt. Each week's prices build a history and a chart for every item.</p>
+                <button type="button" onClick={() => setReceiptOpen(true)}
+                  className="mt-4 flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-[14px] font-semibold text-white shadow-md hover:bg-emerald-700 active:scale-95">
+                  <Camera size={17} /> Add a receipt
+                </button>
+              </div>
             ) : (
               <>
                 <div className="mb-3 grid grid-cols-3 gap-2">
@@ -4827,6 +4835,11 @@ function AppMain() {
                     </button>
                   ))}
                 </div>
+
+                <button type="button" onClick={() => setReceiptOpen(true)}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3 text-[14px] font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.99]">
+                  <Camera size={16} /> Add this week's receipt
+                </button>
 
                 <h2 className={cx(LABEL_SM, "mb-2 mt-6")}>Receipts</h2>
                 {[...receipts].reverse().map((rc) => (
@@ -5152,6 +5165,11 @@ function AppMain() {
       label: "Pantry staples",
       hint: pantry.length ? String(pantry.length) : undefined,
       onClick: () => setPantryOpen(true),
+    },
+    {
+      icon: Receipt,
+      label: "Add a receipt (prices)",
+      onClick: () => { setView("prices"); setReceiptOpen(true); },
     },
     {
       icon: Repeat,
