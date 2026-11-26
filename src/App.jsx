@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useSyncExternalStore } from "react";
 import { auth, db } from "./firebase";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import {
@@ -19,7 +19,7 @@ import {
   Paintbrush, Leaf, TreePine, Wind, X, Pencil, Check, Sun, Star, FileText, Camera, Link2,
   AlertTriangle, ChevronLeft, ChevronRight, Search, ArrowUpDown, BookOpen, Download,
   MoreVertical, RotateCcw, Plus, Minus, Menu, Store, ShoppingBag, Trash2, MapPin,
-  Image as ImageIcon, Loader2
+  Image as ImageIcon, Loader2, MessageCircle, Lightbulb, Archive
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -641,48 +641,109 @@ function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, 
    6. Shopping-list components
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function StepTimer({ seconds, stepText }) {
-  const [remaining, setRemaining] = useState(seconds);
-  const [running, setRunning] = useState(false);
-  const [done, setDone] = useState(false);
-  const ref = useRef(null);
+/* ── Timers: one shared store so several can run at once, across recipes ── */
 
-  useEffect(() => { setRemaining(seconds); setRunning(false); setDone(false); }, [seconds]);
+/** Timers are stored by end time, so they stay correct if the phone sleeps or the page reloads. */
+const timerStore = (() => {
+  const KEY = "dl.timers.v1";
+  let timers = {};
+  try { timers = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch { timers = {}; }
+  const subs = new Set();
+  let tick = null;
+  let snapshot = timers;
 
-  useEffect(() => {
-    if (running) {
+  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(timers)); } catch { /* private mode */ } };
+  const emit = () => { snapshot = { ...timers }; subs.forEach((f) => f()); };
+
+  const beep = () => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      [0, 0.35, 0.7].forEach((t) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.25, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.3);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.3);
+      });
+    } catch { /* no audio */ }
+    try { navigator.vibrate?.([300, 150, 300]); } catch { /* no vibrate */ }
+  };
+
+  const check = () => {
+    const now = Date.now();
+    let changed = false;
+    Object.values(timers).forEach((t) => {
+      if (t.endsAt && t.endsAt <= now && !t.done) {
+        t.done = true; t.endsAt = null; t.remaining = 0; changed = true;
+        beep();
+        sendNotif("⏰ " + t.label, t.step?.slice(0, 80) || "Timer done");
+      }
+    });
+    if (changed) persist();
+    emit();
+    if (!Object.values(timers).some((t) => t.endsAt)) { clearInterval(tick); tick = null; }
+  };
+  const ensureTick = () => { if (!tick) tick = setInterval(check, 500); };
+  if (Object.values(timers).some((t) => t.endsAt)) ensureTick();
+
+  const api = {
+    subscribe: (f) => { subs.add(f); return () => subs.delete(f); },
+    get: () => snapshot,
+    remainingOf: (t) => (t ? (t.endsAt ? Math.max(0, Math.ceil((t.endsAt - Date.now()) / 1000)) : t.remaining) : 0),
+    start(id, { total, label, step, recipeId }) {
       reqNotif();
-      ref.current = setInterval(() => {
-        setRemaining((r) => {
-          if (r <= 1) {
-            clearInterval(ref.current);
-            setRunning(false);
-            setDone(true);
-            try { sendNotif("Timer done!", stepText?.slice(0, 60)); } catch (e) { /* ignore */ }
-            return 0;
-          }
-          return r - 1;
-        });
-      }, 1000);
-    } else {
-      clearInterval(ref.current);
-    }
-    return () => clearInterval(ref.current);
-  }, [running]);
+      const t = timers[id];
+      const left = t && !t.done && t.remaining > 0 ? t.remaining : total;
+      timers[id] = { id, total, label, step, recipeId, remaining: left, endsAt: Date.now() + left * 1000, done: false };
+      persist(); ensureTick(); emit();
+    },
+    pause(id) {
+      const t = timers[id]; if (!t?.endsAt) return;
+      t.remaining = api.remainingOf(t); t.endsAt = null; persist(); emit();
+    },
+    addMinute(id) {
+      const t = timers[id]; if (!t) return;
+      if (t.done) { t.done = false; t.remaining = 60; t.endsAt = Date.now() + 60000; t.total = Math.max(t.total, 60); ensureTick(); }
+      else if (t.endsAt) t.endsAt += 60000; else t.remaining += 60;
+      t.total += 60; persist(); emit();
+    },
+    clear(id) { delete timers[id]; persist(); emit(); },
+  };
+  return api;
+})();
 
-  const pct = Math.round(((seconds - remaining) / seconds) * 100);
+const useTimers = () => useSyncExternalStore(timerStore.subscribe, timerStore.get);
+
+/** Small ring + time shown under a recipe step. Tap to start / pause / reset. */
+function StepTimer({ id, seconds, label, stepText, recipeId }) {
+  const timers = useTimers();
+  const t = timers[id];
+  const running = !!t?.endsAt;
+  const done = !!t?.done;
+  const remaining = t ? timerStore.remainingOf(t) : seconds;
+  const total = t?.total || seconds;
+  const pct = Math.round(((total - remaining) / total) * 100);
   const circ = 2 * Math.PI * 9;
-  const reset = (e) => { e.stopPropagation(); setRemaining(seconds); setRunning(false); setDone(false); };
+
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (done) timerStore.clear(id);
+    else if (running) timerStore.pause(id);
+    else timerStore.start(id, { total: seconds, label, step: stepText, recipeId });
+  };
+  const reset = (e) => { e.stopPropagation(); timerStore.clear(id); };
 
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); if (done) reset(e); else setRunning((r) => !r); }}
+      onClick={toggle}
       className={cx(
         "mt-2 inline-flex items-center gap-2 rounded-full py-1 pl-1.5 pr-3 ring-1 transition-all duration-200 active:scale-95",
         done ? "bg-emerald-50 text-emerald-600 ring-emerald-200"
           : running ? "bg-indigo-50 text-indigo-600 ring-indigo-200"
-            : "bg-slate-100 text-slate-500 ring-slate-200 hover:bg-slate-200"
+            : t ? "bg-amber-50 text-amber-700 ring-amber-200"
+              : "bg-slate-100 text-slate-500 ring-slate-200 hover:bg-slate-200"
       )}
     >
       <svg width="22" height="22" viewBox="0 0 22 22" className="shrink-0">
@@ -690,11 +751,11 @@ function StepTimer({ seconds, stepText }) {
         {!done && (
           <circle
             cx="11" cy="11" r="9" fill="none" strokeWidth="2.5" strokeLinecap="round"
-            className={running ? "stroke-indigo-500" : "stroke-slate-400"}
+            className={running ? "stroke-indigo-500" : t ? "stroke-amber-500" : "stroke-slate-400"}
             strokeDasharray={circ}
             strokeDashoffset={circ * (1 - pct / 100)}
             transform="rotate(-90 11 11)"
-            style={{ transition: "stroke-dashoffset 0.9s linear" }}
+            style={{ transition: "stroke-dashoffset 0.5s linear" }}
           />
         )}
         <text x="11" y="15" textAnchor="middle" fontSize="8" fontWeight="700" fill="currentColor">
@@ -704,8 +765,69 @@ function StepTimer({ seconds, stepText }) {
       <span className="min-w-[38px] text-center text-[13px] font-semibold tabular-nums">
         {done ? "Done!" : fmtTime(remaining)}
       </span>
-      {(running || done) && <RotateCcw size={11} className="opacity-60" onClick={reset} />}
+      {t && <RotateCcw size={11} className="opacity-60" onClick={reset} />}
     </button>
+  );
+}
+
+/** Bar pinned to the bottom of every screen listing all timers that are going. */
+function TimerTray() {
+  const timers = useTimers();
+  const list = Object.values(timers).sort((a, b) =>
+    (b.done - a.done) || (timerStore.remainingOf(a) - timerStore.remainingOf(b)));
+  // Keep page content clear of the tray.
+  useEffect(() => {
+    document.body.style.paddingBottom = list.length ? list.length * 52 + 28 + "px" : "";
+  }, [list.length]);
+  const onOpenRecipe = (id) => id && window.dispatchEvent(new CustomEvent("dl:open-recipe", { detail: id }));
+  if (!list.length) return null;
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[900] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pl-[17rem]">
+      <div className="pointer-events-auto mx-auto flex max-w-2xl flex-col gap-1.5 rounded-2xl bg-slate-900/95 p-2 shadow-2xl ring-1 ring-white/10 backdrop-blur">
+        {list.map((t) => {
+          const left = timerStore.remainingOf(t);
+          const running = !!t.endsAt;
+          return (
+            <div
+              key={t.id}
+              className={cx(
+                "flex items-center gap-2 rounded-xl px-2.5 py-1.5",
+                t.done ? "animate-pulse bg-emerald-500/20" : "bg-white/5"
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => onOpenRecipe?.(t.recipeId)}
+                className="min-w-0 flex-1 text-left"
+                title="Open recipe"
+              >
+                <div className="truncate text-[12.5px] font-semibold text-white">{t.label}</div>
+                <div className="truncate text-[11px] text-slate-400">{t.step}</div>
+              </button>
+              <span className={cx("w-14 text-right text-[16px] font-bold tabular-nums",
+                t.done ? "text-emerald-300" : running ? "text-white" : "text-amber-300")}>
+                {t.done ? "Done" : fmtTime(left)}
+              </span>
+              {!t.done && (
+                <button type="button" onClick={() => (running ? timerStore.pause(t.id) : timerStore.start(t.id, t))}
+                  className="grid h-8 w-8 place-items-center rounded-full bg-white/10 text-[11px] font-bold text-white hover:bg-white/20"
+                  title={running ? "Pause" : "Resume"}>
+                  {running ? "▐▐" : "▶"}
+                </button>
+              )}
+              <button type="button" onClick={() => timerStore.addMinute(t.id)}
+                className="h-8 rounded-full bg-white/10 px-2 text-[11px] font-semibold text-white hover:bg-white/20" title="Add a minute">
+                +1m
+              </button>
+              <button type="button" onClick={() => timerStore.clear(t.id)}
+                className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white" title="Dismiss">
+                <X size={14} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -1067,6 +1189,98 @@ function AisleRulesModal({ rules, onDelete, onClose }) {
           })}
         </div>
       )}
+      <div className="mt-5 flex justify-end">
+        <button type="button" onClick={onClose} className={BTN_GHOST}>Done</button>
+      </div>
+    </Sheet>
+  );
+}
+
+/* ── Pantry staples: things always on hand, kept off the Market Basket list ── */
+
+const PANTRY_SUGGESTIONS = [
+  "salt", "black pepper", "olive oil", "vegetable oil", "butter", "garlic powder", "onion powder",
+  "paprika", "chili powder", "cumin", "dried oregano", "dried thyme", "red pepper flakes",
+  "flour", "sugar", "brown sugar", "baking soda", "baking powder", "vanilla extract",
+  "soy sauce", "worcestershire sauce", "white vinegar", "cooking spray",
+];
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** True if a shopping-list line is covered by one of the pantry staples (whole-word match). */
+const isPantryStaple = (text, pantry) => {
+  if (!pantry?.length) return false;
+  // The item's name is what's left after dropping "(...)", anything after a comma, and "to taste".
+  // A staple must be how the name ENDS: "kosher salt" matches "salt"; "salt pork" doesn't.
+  const t = String(text).toLowerCase().replace(/\([^)]*\)/g, " ").split(",")[0]
+    .replace(/\b(to taste|as needed|for serving|optional)\b/g, " ").replace(/\s+/g, " ").trim();
+  return pantry.some((p) => {
+    const k = p.toLowerCase().trim();
+    if (!k) return false;
+    if (t === "pepper" && (k === "black pepper" || k === "pepper")) return true;
+    return new RegExp("(^|[^a-z])" + escapeRe(k) + "(s|es)?$").test(t);
+  });
+};
+
+function PantryModal({ pantry, onSave, onClose }) {
+  const [input, setInput] = useState("");
+  const list = [...pantry].sort((a, b) => a.localeCompare(b));
+  const add = (v) => {
+    const k = v.trim().toLowerCase();
+    if (!k || pantry.includes(k)) { setInput(""); return; }
+    onSave([...pantry, k]); setInput("");
+  };
+  const remove = (k) => onSave(pantry.filter((p) => p !== k));
+  const ideas = PANTRY_SUGGESTIONS.filter((s) => !pantry.includes(s));
+
+  return (
+    <Sheet title="Pantry staples" subtitle="Always on hand — left off the list when you pick recipes" onClose={onClose} wide>
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add(input)}
+          placeholder="e.g. olive oil"
+          className={INPUT}
+        />
+        <button type="button" onClick={() => add(input)} disabled={!input.trim()} className={cx(BTN_PRIMARY, "shrink-0")}>Add</button>
+      </div>
+      <p className="mt-2 text-[12px] text-slate-400">
+        Be specific: "black pepper" won't catch bell peppers, but "pepper" would.
+      </p>
+
+      <div className="mt-4">
+        <div className={cx(LABEL_SM, "mb-2")}>Your staples ({list.length})</div>
+        {list.length === 0 ? (
+          <p className="text-[13px] text-slate-400">None yet. Tap some ideas below or type your own.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {list.map((k) => (
+              <span key={k} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 py-1 pl-3 pr-1 text-[13px] text-indigo-800 ring-1 ring-indigo-100">
+                {k}
+                <button type="button" onClick={() => remove(k)} className="grid h-5 w-5 place-items-center rounded-full hover:bg-indigo-100" aria-label={"Remove " + k}>
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {ideas.length > 0 && (
+        <div className="mt-5">
+          <div className={cx(LABEL_SM, "mb-2")}>Ideas</div>
+          <div className="flex flex-wrap gap-1.5">
+            {ideas.map((k) => (
+              <button key={k} type="button" onClick={() => add(k)}
+                className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[13px] text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50">
+                <Plus size={12} /> {k}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-5 flex justify-end">
         <button type="button" onClick={onClose} className={BTN_GHOST}>Done</button>
       </div>
@@ -1459,6 +1673,311 @@ function ImportSheet({ onClose, onSave }) {
   );
 }
 
+/* ── Recipe page helpers: ingredient check-off and "ask about this recipe" ── */
+
+/** Ingredients you can tap off while cooking. Saved on this device; clears itself after 12 hours. */
+function IngredientChecklist({ recipeId, items }) {
+  const KEY = "dl.ingChecks.v1";
+  const load = () => {
+    try {
+      const all = JSON.parse(localStorage.getItem(KEY) || "{}");
+      const e = all[recipeId];
+      return e && Date.now() - e.at < 12 * 3600 * 1000 ? new Set(e.checked) : new Set();
+    } catch { return new Set(); }
+  };
+  const [checked, setChecked] = useState(load);
+  useEffect(() => { setChecked(load()); }, [recipeId]);
+
+  const save = (next) => {
+    setChecked(next);
+    try {
+      const all = JSON.parse(localStorage.getItem(KEY) || "{}");
+      if (next.size) all[recipeId] = { checked: [...next], at: Date.now() }; else delete all[recipeId];
+      localStorage.setItem(KEY, JSON.stringify(all));
+    } catch { /* private mode */ }
+  };
+  const toggle = (i) => { const n = new Set(checked); n.has(i) ? n.delete(i) : n.add(i); save(n); };
+
+  return (
+    <>
+      <ul>
+        {items.map((ing, i) => {
+          const on = checked.has(i);
+          return (
+            <li key={i} className="border-b border-slate-100 last:border-0">
+              <button
+                type="button"
+                onClick={() => toggle(i)}
+                className="flex w-full items-start gap-3 py-2 text-left"
+              >
+                <span className={cx(
+                  "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md ring-1 transition-colors",
+                  on ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white ring-slate-300"
+                )}>
+                  {on && <Check size={13} strokeWidth={3} />}
+                </span>
+                <span className={cx("text-[14.5px] transition-colors", on ? "text-slate-400 line-through" : "text-slate-700")}>
+                  {ing}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {checked.size > 0 && (
+        <div className="mt-1 flex items-center justify-between text-[12px] text-slate-400">
+          <span>{checked.size} of {items.length} added</span>
+          <button type="button" onClick={() => save(new Set())} className="font-medium text-indigo-600 hover:underline">Uncheck all</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Chat about the recipe on screen. Answers can be saved into the recipe's notes. */
+function AskRecipeSheet({ recipe, onClose, onSaveNote }) {
+  const [messages, setMessages] = useState([]);   // [{ role, content }]
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [savedIdx, setSavedIdx] = useState(new Set());
+  const endRef = useRef(null);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, busy]);
+
+  const send = async (q) => {
+    const text = (q ?? input).trim();
+    if (!text || busy) return;
+    const next = [...messages, { role: "user", content: text }];
+    setMessages(next); setInput(""); setBusy(true); setError(null);
+    try {
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "ask",
+          recipe: {
+            title: recipe.title, category: recipe.category, servings: recipe.servings,
+            ingredients: recipe.ingredients, instructions: recipe.instructions, notes: recipe.notes, storage: recipe.storage,
+          },
+          messages: next,
+        }),
+      });
+      let data = {};
+      try { data = await res.json(); } catch { /* ignore */ }
+      if (!res.ok) throw new Error(data.error || "Couldn't get an answer (" + res.status + ")");
+      setMessages([...next, { role: "assistant", content: data.answer }]);
+    } catch (e) {
+      setError(e.message);
+    }
+    setBusy(false);
+  };
+
+  const starters = ["What can I substitute if I'm missing something?", "How do I make this in cast iron?", "Can I make this ahead?", "How do I make it lower-glycemic?"];
+
+  return (
+    <Sheet title="Ask about this recipe" subtitle={recipe.title} onClose={onClose} wide>
+      <div className="flex flex-col gap-3">
+        {!messages.length && (
+          <div className="flex flex-wrap gap-2">
+            {starters.map((s) => (
+              <button key={s} type="button" onClick={() => send(s)}
+                className="rounded-full bg-indigo-50 px-3 py-1.5 text-[12.5px] font-medium text-indigo-700 ring-1 ring-indigo-100 hover:bg-indigo-100">
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {messages.map((m, i) => (
+          <div key={i} className={cx("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+            <div className={cx(
+              "max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed",
+              m.role === "user" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800"
+            )}>
+              {m.content}
+              {m.role === "assistant" && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    disabled={savedIdx.has(i)}
+                    onClick={async () => { await onSaveNote(m.content); setSavedIdx((p) => new Set(p).add(i)); }}
+                    className="text-[12px] font-semibold text-indigo-600 hover:underline disabled:text-emerald-600 disabled:no-underline"
+                  >
+                    {savedIdx.has(i) ? "✓ Saved to notes" : "+ Save to notes"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {busy && (
+          <div className="flex items-center gap-2 text-[13px] text-slate-400">
+            <Loader2 size={14} className="animate-spin" /> Thinking…
+          </div>
+        )}
+        {error && <p className="text-[13px] text-red-600">{error}</p>}
+        <div ref={endRef} />
+
+        <div className="sticky bottom-0 flex gap-2 bg-white pt-1">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+            placeholder="Ask anything — swaps, timing, technique…"
+            className={INPUT}
+            autoFocus={!isMobile}
+          />
+          <button type="button" disabled={!input.trim() || busy} onClick={() => send()} className={cx(BTN_PRIMARY, "shrink-0")}>Ask</button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+/* ── Recipe ideas: ask for a dish by name, or get suggestions, then add with one tap ── */
+
+function IdeasSheet({ existingTitles, onAdd, onOpen, onClose }) {
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(null);           // null | "dish" | "ideas" | "more"
+  const [error, setError] = useState(null);
+  const [results, setResults] = useState([]);       // [{ recipe, added: id|null, open: bool }]
+  const [lastRequest, setLastRequest] = useState(null);
+
+  const fetchIdeas = async (payload, kind, append = false) => {
+    setBusy(kind); setError(null);
+    try {
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "suggest", existing: existingTitles, ...payload }),
+      });
+      let data = {};
+      try { data = await res.json(); } catch { /* ignore */ }
+      if (!res.ok) throw new Error(data.error || "No ideas came back (" + res.status + ")");
+      const rows = (data.recipes || []).map((r) => ({ recipe: r, added: null, open: kind === "dish" }));
+      setResults((cur) => (append ? [...cur, ...rows] : rows));
+    } catch (e) { setError(e.message); }
+    setBusy(null);
+  };
+
+  const writeDish = (dish) => {
+    const d = (dish ?? input).trim(); if (!d) return;
+    setLastRequest({ request: "Variations or close cousins of: " + d });
+    fetchIdeas({ dish: d }, "dish");
+  };
+  const suggest = (req) => {
+    const r = (req ?? input).trim();
+    setLastRequest({ request: r });
+    fetchIdeas({ request: r, count: 4 }, "ideas");
+  };
+  const more = () => fetchIdeas({ ...lastRequest, count: 4, exclude: results.map((x) => x.recipe.title) }, "more", true);
+
+  const update = (i, patch) => setResults((cur) => cur.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const add = async (i) => {
+    const r = results[i].recipe;
+    const id = await onAdd({ ...r, baseServings: r.servings });
+    update(i, { added: id });
+  };
+
+  const chips = ["Weeknight cast iron dinners", "High-protein, low-glycemic", "Soups for cold nights", "Something with fish", "Sunday comfort food"];
+
+  return (
+    <Sheet title="Recipe ideas" subtitle="Name a dish you want, or ask for suggestions" onClose={busy ? () => {} : onClose} wide>
+      <input
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && input.trim() && writeDish()}
+        disabled={!!busy}
+        placeholder='e.g. "fish chowder" or "easy chicken dinners"'
+        className={INPUT}
+        autoFocus={!isMobile}
+      />
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={!input.trim() || !!busy} onClick={() => writeDish()} className={cx(BTN_PRIMARY, "flex items-center gap-1.5")}>
+          {busy === "dish" ? <Loader2 size={14} className="animate-spin" /> : <Pencil size={14} />} Write this recipe
+        </button>
+        <button type="button" disabled={!!busy} onClick={() => suggest()} className={cx(BTN_GHOST, "flex items-center gap-1.5")}>
+          {busy === "ideas" ? <Loader2 size={14} className="animate-spin" /> : <Lightbulb size={14} />} {input.trim() ? "Suggest ideas" : "Surprise me"}
+        </button>
+      </div>
+
+      {!results.length && !busy && (
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {chips.map((c) => (
+            <button key={c} type="button" onClick={() => { setInput(c); suggest(c); }}
+              className="rounded-full bg-indigo-50 px-3 py-1.5 text-[12.5px] font-medium text-indigo-700 ring-1 ring-indigo-100 hover:bg-indigo-100">
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {busy && busy !== "more" && (
+        <p className="mt-4 flex items-center gap-2 text-[13px] text-slate-400">
+          <Loader2 size={14} className="animate-spin" /> {busy === "dish" ? "Writing the recipe…" : "Coming up with ideas…"} (10–30 seconds)
+        </p>
+      )}
+      {error && (
+        <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-red-50 p-3 text-[13px] text-red-700">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {error}
+        </p>
+      )}
+
+      {results.length > 0 && (
+        <div className="mt-4 flex flex-col gap-2.5">
+          {results.map(({ recipe: r, added, open }, i) => (
+            <div key={i} className={cx(CARD, "overflow-hidden")}>
+              <button type="button" onClick={() => update(i, { open: !open })} className="flex w-full items-start gap-3 px-4 py-3 text-left">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[14.5px] font-semibold text-slate-900">{r.title}</div>
+                  <div className="mt-0.5 text-[12px] text-slate-400">{r.category} · serves {r.servings} · {r.ingredients.length} ingredients</div>
+                  {r.summary && <div className="mt-1 text-[13px] text-slate-600">{r.summary}</div>}
+                </div>
+                <ChevronRight size={16} className={cx("mt-1 shrink-0 text-slate-300 transition-transform", open && "rotate-90")} />
+              </button>
+
+              {open && (
+                <div className="animate-rise border-t border-slate-100 px-4 pb-4 pt-3">
+                  <div className={cx(LABEL_SM, "mb-1")}>Ingredients</div>
+                  <ul className="mb-3 list-disc pl-5 text-[13.5px] leading-relaxed text-slate-700">
+                    {r.ingredients.map((x, k) => <li key={k}>{x}</li>)}
+                  </ul>
+                  <div className={cx(LABEL_SM, "mb-1")}>Steps</div>
+                  <ol className="mb-3 list-decimal pl-5 text-[13.5px] leading-relaxed text-slate-700">
+                    {r.instructions.map((x, k) => <li key={k} className="mb-1">{x}</li>)}
+                  </ol>
+                  {r.notes && <p className="mb-3 whitespace-pre-line text-[12.5px] text-slate-500">{r.notes}</p>}
+                  {!added && (
+                    <AiChangeBox getRecipe={() => r} onApply={(nr) => update(i, { recipe: { ...nr, summary: r.summary } })} />
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-2.5">
+                {added ? (
+                  <>
+                    <span className="flex items-center gap-1 text-[13px] font-semibold text-emerald-600"><Check size={14} /> Added</span>
+                    <button type="button" onClick={() => onOpen(added)} className={BTN_GHOST}>Open</button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => add(i)} className={cx(BTN_PRIMARY, "flex items-center gap-1.5")}>
+                    <Plus size={14} /> Add to recipes
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <button type="button" disabled={!!busy} onClick={more} className={cx(BTN_GHOST, "flex items-center justify-center gap-1.5")}>
+            {busy === "more" ? <Loader2 size={14} className="animate-spin" /> : <Lightbulb size={14} />} More ideas like these
+          </button>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 /** "Ask for a change" box: sends the recipe + request to the AI and hands back the revised recipe. */
 function AiChangeBox({ getRecipe, onApply }) {
   const [ask, setAsk] = useState("");
@@ -1554,6 +2073,15 @@ function DraftEditor({ draft, onChange, onRemove }) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function App() {
+  return (
+    <>
+      <AppMain />
+      <TimerTray />
+    </>
+  );
+}
+
+function AppMain() {
   /* ── State ─────────────────────────────────────────────────────────────── */
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1565,8 +2093,15 @@ export default function App() {
   const [view, setView] = useState("shopping");
   const [storeTab, setStoreTab] = useState("mb");
   const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    const open = (e) => { setView("recipes"); setSelectedId(e.detail); };
+    window.addEventListener("dl:open-recipe", open);
+    return () => window.removeEventListener("dl:open-recipe", open);
+  }, []);
 
   const [importOpen, setImportOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [ideasOpen, setIdeasOpen] = useState(false);
 
   const [editingRecipeId, setEditingRecipeId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
@@ -1616,6 +2151,8 @@ export default function App() {
   /** Permanent keyword→aisle rules. Add-only from the UI — see AisleRulesModal. */
   const [aisleRules, setAisleRules] = useState({});
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [pantry, setPantry] = useState([]);
+  const [pantryOpen, setPantryOpen] = useState(false);
   const [aisleEditorItem, setAisleEditorItem] = useState(null);
 
   /* ── Effects ───────────────────────────────────────────────────────────── */
@@ -1678,6 +2215,7 @@ export default function App() {
       if (snap.exists()) {
         const data = snap.data();
         if (data.aisleRules) setAisleRules(data.aisleRules);
+        setPantry(Array.isArray(data.pantry) ? data.pantry : []);
       }
     });
     return () => unsub();
@@ -1836,7 +2374,7 @@ export default function App() {
     setDoc(doc(db, "stores", id), patch, { merge: true }).catch((e) => console.error("store save failed:", e));
 
   /* ── Derived: Market Basket ────────────────────────────────────────────── */
-  const allShoppingItems = useMemo(() => {
+  const rawShoppingItems = useMemo(() => {
     const items = [];
     recipes.filter((r) => checkedIds.has(r.id)).forEach((r) => {
       const ratio = r.servings / r.baseServings;
@@ -1863,6 +2401,20 @@ export default function App() {
     });
     return items;
   }, [checkedIds, recipes, manualItems, removedKeys, aisleRules]);
+
+  /* Recipe ingredients that are pantry staples stay off the list (items you add by hand always show). */
+  const allShoppingItems = useMemo(
+    () => rawShoppingItems.filter((i) => i.manual || !isPantryStaple(i.text, pantry)),
+    [rawShoppingItems, pantry]
+  );
+  const skippedStaples = useMemo(
+    () => [...new Set(rawShoppingItems.filter((i) => !i.manual && isPantryStaple(i.text, pantry)).map((i) => i.text.toLowerCase()))],
+    [rawShoppingItems, pantry]
+  );
+  const savePantry = (next) => {
+    setPantry(next);
+    setDoc(doc(db, "app", "mbSettings"), { pantry: next }, { merge: true }).catch((e) => console.error("pantry save failed:", e));
+  };
 
   /**
    * Active (unchecked) rows, grouped by aisle. Only unchecked items are
@@ -2369,7 +2921,7 @@ export default function App() {
     const isEditing = editingRecipeId === selected.id;
 
     const closeDetail = () => {
-      setSelectedId(null); cancelEditRecipe(); setConfirmDelete(false);
+      setSelectedId(null); cancelEditRecipe(); setConfirmDelete(false); setAskOpen(false);
       if (wakeLock) wakeLock.release();
       setWakeActive(false); setWakeLock(null);
     };
@@ -2378,6 +2930,15 @@ export default function App() {
       <div className="min-h-dvh bg-slate-50">
         {nav}
         {storeEditorEl}
+        {askOpen && (
+          <AskRecipeSheet
+            recipe={selected}
+            onClose={() => setAskOpen(false)}
+            onSaveNote={(txt) => updateDoc(doc(db, "recipes", selected.id), {
+              notes: (selected.notes ? selected.notes.trim() + "\n\n" : "") + txt.trim(),
+            })}
+          />
+        )}
         <div className="md:pl-64">
           <AppHeader
             title={selected.title}
@@ -2528,16 +3089,28 @@ export default function App() {
                   />
                 </div>
 
+                <button
+                  type="button"
+                  onClick={() => setAskOpen(true)}
+                  className="mb-6 flex w-full items-center gap-3 rounded-2xl bg-indigo-50/70 px-4 py-3 text-left ring-1 ring-indigo-100 transition-colors hover:bg-indigo-50"
+                >
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-indigo-600 text-white">
+                    <MessageCircle size={17} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[14px] font-semibold text-indigo-900">Ask about this recipe</div>
+                    <div className="text-[12px] text-indigo-700/70">Swaps, timing, technique — answers know this recipe</div>
+                  </div>
+                  <ChevronRight size={16} className="text-indigo-300" />
+                </button>
+
                 {selected.ingredients.length > 0 && (
                   <section className="mb-6">
                     <h2 className={cx(LABEL_SM, "mb-2 border-b border-slate-200 pb-2 text-indigo-500")}>Ingredients</h2>
-                    <ul>
-                      {selected.ingredients.map((ing, i) => (
-                        <li key={i} className="border-b border-slate-100 py-2 text-[14.5px] text-slate-700 last:border-0">
-                          {ratio !== 1 ? scaleIngredient(ing, ratio) : ing}
-                        </li>
-                      ))}
-                    </ul>
+                    <IngredientChecklist
+                      recipeId={selected.id}
+                      items={selected.ingredients.map((ing) => (ratio !== 1 ? scaleIngredient(ing, ratio) : ing))}
+                    />
                   </section>
                 )}
 
@@ -2554,7 +3127,7 @@ export default function App() {
                             </span>
                             <div className="min-w-0 flex-1">
                               <p className="text-[14.5px] leading-relaxed text-slate-700">{step}</p>
-                              {secs && <StepTimer key={selected.id + "-" + i} seconds={secs} stepText={step} />}
+                              {secs && <StepTimer id={selected.id + "-" + i} seconds={secs} label={selected.title} stepText={step} recipeId={selected.id} />}
                             </div>
                           </li>
                         );
@@ -2573,7 +3146,7 @@ export default function App() {
                 {selected.notes && (
                   <section className="mb-6">
                     <h2 className={cx(LABEL_SM, "mb-2 border-b border-slate-200 pb-2 text-indigo-500")}>Notes</h2>
-                    <p className="rounded-xl bg-white p-3.5 text-[14.5px] leading-relaxed text-slate-700 ring-1 ring-slate-200">{selected.notes}</p>
+                    <p className="whitespace-pre-line rounded-xl bg-white p-3.5 text-[14.5px] leading-relaxed text-slate-700 ring-1 ring-slate-200">{selected.notes}</p>
                   </section>
                 )}
               </>
@@ -2594,6 +3167,14 @@ export default function App() {
         {storeEditorEl}
 
         {importOpen && <ImportSheet onClose={() => setImportOpen(false)} onSave={handleImportSave} />}
+        {ideasOpen && (
+          <IdeasSheet
+            existingTitles={recipes.map((r) => r.title)}
+            onAdd={async (r) => (await saveRecipesToFirestore([r]))[0]}
+            onOpen={(id) => { setIdeasOpen(false); setSelectedId(id); }}
+            onClose={() => setIdeasOpen(false)}
+          />
+        )}
 
         <div className="md:pl-64">
           <AppHeader
@@ -2603,6 +3184,14 @@ export default function App() {
             right={
               <div className="flex shrink-0 items-center gap-1.5">
                 <IconBtn icon={ArrowUpDown} size={15} title={sortAZ ? "Sort Z→A" : "Sort A→Z"} onClick={() => setSortAZ((v) => !v)} />
+                <button
+                  type="button"
+                  onClick={() => setIdeasOpen(true)}
+                  className="flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 ring-1 ring-indigo-200 transition-all duration-150 hover:bg-indigo-50 active:scale-95"
+                >
+                  <Lightbulb size={14} strokeWidth={2.5} />
+                  Ideas
+                </button>
                 <button
                   type="button"
                   onClick={() => setImportOpen(true)}
@@ -2778,6 +3367,12 @@ export default function App() {
       hint: Object.keys(aisleRules).length ? String(Object.keys(aisleRules).length) : undefined,
       onClick: () => setRulesOpen(true),
     },
+    storeTab === "mb" && {
+      icon: Archive,
+      label: "Pantry staples",
+      hint: pantry.length ? String(pantry.length) : undefined,
+      onClick: () => setPantryOpen(true),
+    },
     {
       icon: Sun,
       label: wakeActive ? "Let screen sleep" : "Keep screen awake",
@@ -2799,6 +3394,7 @@ export default function App() {
         />
       )}
 
+      {pantryOpen && <PantryModal pantry={pantry} onSave={savePantry} onClose={() => setPantryOpen(false)} />}
       {rulesOpen && (
         <AisleRulesModal rules={aisleRules} onDelete={deleteAisleRule} onClose={() => setRulesOpen(false)} />
       )}
@@ -2850,6 +3446,19 @@ export default function App() {
                 <p className="mb-2 line-clamp-2 text-[12px] italic text-slate-400">
                   From: {recipes.filter((r) => checkedIds.has(r.id)).map((r) => r.title).join(", ")}
                 </p>
+              )}
+              {skippedStaples.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setPantryOpen(true)}
+                  className="mb-3 flex w-full items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-left text-[12.5px] text-amber-800 ring-1 ring-amber-100"
+                >
+                  <Archive size={14} className="shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">
+                    Skipped pantry staples: {skippedStaples.join(", ")}
+                  </span>
+                  <span className="shrink-0 font-semibold">Edit</span>
+                </button>
               )}
 
               {total === 0 && (

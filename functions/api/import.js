@@ -15,8 +15,9 @@
 //
 // Model per job:
 //   Haiku  — text, web pages and edits. Reformatting is light work; Haiku is fast and cheap.
-//   Sonnet — photos. Reading handwriting and blurry cookbook pages is where the bigger
-//            model earns its cost.
+//   Sonnet — photos and new-recipe suggestions. Reading handwriting and inventing recipes
+//            that actually work are where the bigger model earns its cost.
+//   Haiku also answers "ask about this recipe" questions.
 // Override with env.IMPORT_MODEL_FAST / env.IMPORT_MODEL_VISION if needed.
 
 const MODEL_FAST = "claude-haiku-5-5";
@@ -46,6 +47,7 @@ const RECIPE_TOOL = {
             instructions: { type: "array", items: { type: "string" } },
             notes: { type: "string" },
             storage: { type: "string" },
+            summary: { type: "string", description: "Suggestions only: one sentence on why this dish fits." },
           },
           required: ["title", "category", "servings", "ingredients", "instructions", "notes", "storage"],
         },
@@ -96,6 +98,29 @@ const REFINE_SYSTEM = `You revise one recipe in Doug's List at the user's reques
 - Instructions: one step per item, no numbering, times written with digits plus minutes/hours.
 - Category must be one of the allowed values.
 Answer by calling save_recipes with exactly one recipe.`;
+
+// What the AI should know about how this household cooks. Edit freely.
+const HOUSEHOLD = `- Cooks often in cast iron (skillets and a Dutch oven).
+- Leans toward high-protein, lower-glycemic meals, but these are preferences, not strict rules.
+- Doesn't want kale or cauliflower stand-ins (cauliflower rice, cauliflower crust, etc.).
+- Shops mostly at Market Basket in New Hampshire; everyday supermarket ingredients are best.`;
+
+const ASK_SYSTEM = `You are a friendly, practical cooking helper inside Doug's List, a household recipe app. The user is looking at the recipe below, often while cooking, so answer briefly and directly: a few sentences or a short list. Give concrete amounts, times and temperatures (°F). If a substitution or change would work, say exactly how; if it wouldn't, say so and offer the best alternative. Plain text only, no markdown headings.
+
+About this household:
+${HOUSEHOLD}`;
+
+const SUGGEST_SYSTEM = `You suggest new recipes for a household recipe app called Doug's List and write each one out in full so it can be saved with one tap. Suggest dishes that are reliable, well-tested home cooking — not gimmicks — and that are not already in their collection (titles are listed). Vary them across proteins and styles unless the request is specific.
+
+About this household:
+${HOUSEHOLD}
+
+Use the exact same formatting rules as imported recipes:
+- Ingredients: quantity first, digits, fractions like 1/2 or decimals like 1.5, no ½ characters, no heading lines.
+- Instructions: one step per item, no numbering, times written with digits plus minutes/hours, temperatures in °F.
+- Category from the allowed list. Notes: one or two genuinely useful tips (cast iron tips where relevant). Storage: how long it keeps and how to reheat.
+- summary: one sentence on why it fits the request.
+Answer by calling save_recipes.`;
 
 /* ─────────────────────────────── helpers ─────────────────────────────── */
 
@@ -194,7 +219,7 @@ async function readPage(url) {
   };
 }
 
-async function callClaude(env, { system, content, tools, forceTool = true, vision = false }) {
+async function callClaude(env, { system, content, tools, forceTool = true, vision = false, messages, maxTokens = 8000 }) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -204,11 +229,11 @@ async function callClaude(env, { system, content, tools, forceTool = true, visio
     },
     body: JSON.stringify({
       model: vision ? (env.IMPORT_MODEL_VISION || MODEL_VISION) : (env.IMPORT_MODEL_FAST || MODEL_FAST),
-      max_tokens: 8000,
+      max_tokens: maxTokens,
       system,
-      tools,
-      ...(forceTool ? { tool_choice: { type: "tool", name: RECIPE_TOOL.name } } : {}),
-      messages: [{ role: "user", content }],
+      ...(tools ? { tools } : {}),
+      ...(tools && forceTool ? { tool_choice: { type: "tool", name: RECIPE_TOOL.name } } : {}),
+      messages: messages || [{ role: "user", content }],
     }),
   });
   if (!res.ok) {
@@ -216,6 +241,7 @@ async function callClaude(env, { system, content, tools, forceTool = true, visio
     throw new Error(`AI service error ${res.status}${detail ? ": " + detail.slice(0, 200) : ""}`);
   }
   const data = await res.json();
+  if (!tools) return data.content?.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim() || "";
   const call = data.content?.find((b) => b.type === "tool_use" && b.name === RECIPE_TOOL.name);
   return call?.input || null;
 }
@@ -232,6 +258,7 @@ function clean(result) {
       instructions: (r.instructions || []).map((s) => String(s).replace(/^\d+[.)]\s*/, "").trim()).filter(Boolean),
       notes: String(r.notes || "").trim(),
       storage: String(r.storage || "").trim(),
+      ...(r.summary ? { summary: String(r.summary).trim() } : {}),
     }))
     .filter((r) => r.ingredients.length || r.instructions.length);
   return { recipes, problem: result?.problem || "" };
@@ -255,6 +282,54 @@ export async function onRequestPost({ request, env }) {
       }));
       if (!out.recipes.length) return json({ error: "Couldn't apply that change. Try wording it differently." }, 422);
       return json({ recipes: out.recipes.slice(0, 1) });
+    }
+
+    // ── Question about a recipe (chat) ────────────────────────────────────
+    if (body.mode === "ask") {
+      const history = (Array.isArray(body.messages) ? body.messages : [])
+        .filter((m) => (m.role === "user" || m.role === "assistant") && String(m.content || "").trim())
+        .slice(-12)
+        .map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
+      if (!body.recipe || !history.length || history[history.length - 1].role !== "user") {
+        return json({ error: "Ask a question first." }, 400);
+      }
+      const r = body.recipe;
+      const recipeText =
+        `${r.title} (${r.category}, serves ${r.servings})\n\nIngredients:\n${(r.ingredients || []).map((i) => "- " + i).join("\n")}` +
+        `\n\nSteps:\n${(r.instructions || []).map((s, i) => i + 1 + ". " + s).join("\n")}` +
+        (r.notes ? `\n\nNotes: ${r.notes}` : "") + (r.storage ? `\n\nStorage: ${r.storage}` : "");
+      const answer = await callClaude(env, {
+        system: ASK_SYSTEM + "\n\nThe recipe:\n" + recipeText,
+        messages: history,
+        maxTokens: 1200,
+      });
+      if (!answer) return json({ error: "No answer came back. Try again." }, 502);
+      return json({ answer });
+    }
+
+    // ── New recipe suggestions ────────────────────────────────────────────
+    if (body.mode === "suggest") {
+      const have = (Array.isArray(body.existing) ? body.existing : []).slice(0, 400)
+        .map((t) => "- " + String(t).slice(0, 120)).join("\n");
+      const avoid = (Array.isArray(body.exclude) ? body.exclude : []).slice(0, 40).join("; ");
+      const ask = String(body.request || "").trim().slice(0, 500);
+      const dish = String(body.dish || "").trim().slice(0, 200);
+      const count = dish ? 1 : Math.min(5, Math.max(1, parseInt(body.count) || 4));
+      const out = clean(await callClaude(env, {
+        system: SUGGEST_SYSTEM,
+        tools: [RECIPE_TOOL],
+        vision: true, // Sonnet: inventing recipes that work is the harder job
+        content:
+          (dish
+            ? `Write one excellent, classic-style recipe for: ${dish}\n` +
+              `It's fine if a similar title is already in the collection; the user asked for this dish.\n\n`
+            : `Suggest ${count} recipes.\n` +
+              `Request: ${ask || "Surprise me with a good mix for weeknight dinners."}\n\n`) +
+          `Already in the collection${dish ? "" : " (don't repeat these)"}:\n${have || "(none yet)"}` +
+          (avoid ? `\n\nAlso skip these, already suggested: ${avoid}` : ""),
+      }));
+      if (!out.recipes.length) return json({ error: out.problem || "No suggestions came back. Try again." }, 502);
+      return json({ recipes: out.recipes });
     }
 
     // ── Extract from whatever was provided ────────────────────────────────
