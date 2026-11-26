@@ -534,7 +534,7 @@ function Sheet({ title, subtitle, onClose, children, wide }) {
  * Left navigation. A slide-over drawer below `md`, a permanent sidebar above it.
  * Stores first, then Recipes; Import now lives inside the Recipes screen.
  */
-function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, onAddStore, onRecipes, recipesActive, recipeCount, onAssistant }) {
+function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, onAddStore, onRecipes, recipesActive, recipeCount, onAssistant, onFavorites, favCount, favActive }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -631,7 +631,7 @@ function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, 
 
           <div className="my-3 border-t border-slate-200" />
 
-          <button type="button" onClick={() => { onRecipes(); onClose(); }} className={row(recipesActive)}>
+          <button type="button" onClick={() => { onRecipes(); onClose(); }} className={row(recipesActive && !favActive)}>
             <span className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-lg transition-transform duration-150 group-hover:scale-105", recipesActive ? "bg-indigo-50" : "bg-slate-200/70")}>
               <BookOpen size={15} className={recipesActive ? "text-indigo-600" : "text-slate-500"} />
             </span>
@@ -644,6 +644,22 @@ function SideNav({ open, onClose, stores, counts, activeStoreId, onSelectStore, 
               </span>
             )}
           </button>
+
+          {onFavorites && (
+            <button type="button" onClick={() => { onFavorites(); onClose(); }} className={row(favActive)}>
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-amber-50 transition-transform duration-150 group-hover:scale-105">
+                <Star size={15} className="fill-amber-400 text-amber-400" />
+              </span>
+              <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", favActive ? "font-semibold text-slate-900" : "font-medium text-slate-600")}>
+                Favorites
+              </span>
+              {favCount > 0 && (
+                <span className="shrink-0 rounded-full bg-slate-200/80 px-1.5 py-px text-[10.5px] font-bold tabular-nums text-slate-500">
+                  {favCount}
+                </span>
+              )}
+            </button>
+          )}
         </nav>
       </aside>
     </>
@@ -3346,6 +3362,7 @@ function AppMain() {
     setSelectedId(null); setConfirmDelete(false);
   };
 
+  const favCount = recipes.filter((r) => r.favorite).length;
   const filtered = useMemo(() => {
     let list = recipes;
     if (activeTab === "Favorites") list = list.filter((r) => r.favorite);
@@ -3547,9 +3564,12 @@ function AppMain() {
       recipesActive={view === "recipes"}
       recipeCount={recipes.length}
       onSelectStore={(id) => { setStoreTab(id); setView("shopping"); setSelectedId(null); }}
-      onRecipes={() => { setView("recipes"); setSelectedId(null); }}
+      onRecipes={() => { setView("recipes"); setSelectedId(null); setActiveTab("All"); }}
       onAddStore={() => setStoreEditor({ mode: "create" })}
       onAssistant={() => setAssistantOpen(true)}
+      onFavorites={() => { setView("recipes"); setSelectedId(null); setActiveTab("Favorites"); }}
+      favCount={recipes.filter((r) => r.favorite).length}
+      favActive={view === "recipes" && activeTab === "Favorites"}
     />
     </>
   );
@@ -3886,7 +3906,13 @@ function AppMain() {
                         : "bg-white font-medium text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-slate-900"
                     )}
                   >
-                    {cat}
+                    {cat === "Favorites" ? (
+                      <span className="flex items-center gap-1">
+                        <Star size={12} className={on ? "fill-white text-white" : "fill-amber-400 text-amber-400"} />
+                        Favorites
+                        <span className={cx("tabular-nums", on ? "text-indigo-100" : "text-slate-400")}>{favCount}</span>
+                      </span>
+                    ) : cat}
                   </button>
                 );
               })}
@@ -3917,7 +3943,7 @@ function AppMain() {
               <EmptyState
                 icon={BookOpen}
                 title={search ? "No recipes match your search." : activeTab === "Favorites" ? "No favorites yet." : "No recipes in this category yet."}
-                hint={search ? "Try a different ingredient or title." : "Use the Import button to add one."}
+                hint={search ? "Try a different ingredient or title." : activeTab === "Favorites" ? "Open a recipe and tap the ☆ at the top to star it." : "Use the Import button to add one."}
               />
             ) : (
               filtered.map((r) => {
