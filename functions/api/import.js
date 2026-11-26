@@ -122,6 +122,89 @@ Use the exact same formatting rules as imported recipes:
 - summary: one sentence on why it fits the request.
 Answer by calling save_recipes.`;
 
+/* Shopping lists: turn "two cans of diced tomatoes, milk, and bulbs from Lowe's" into items. */
+const ITEMS_TOOL = {
+  name: "add_items",
+  description: "Add the shopping items to the right store lists.",
+  input_schema: {
+    type: "object",
+    properties: {
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Short item name as it should appear on the list, e.g. 'diced tomatoes (can)', 'milk', 'LED light bulbs'." },
+            qty: { type: "integer", minimum: 1 },
+            store: { type: "string", description: "Store id from the list provided." },
+            section: { type: "string", description: "Best section key for that store from the list provided, or empty if none fit." },
+          },
+          required: ["name", "qty", "store", "section"],
+        },
+      },
+    },
+    required: ["items"],
+  },
+};
+
+const ITEMS_SYSTEM = `You turn spoken or typed shopping requests into list items for a household shopping app. Split the request into separate items. Keep names short and natural, singular unless the user means a pack ("eggs" is fine). Put the quantity in qty (default 1; "a couple" = 2, "a dozen eggs" = qty 1 name "eggs (dozen)"). Fix speech-to-text mistakes when the meaning is obvious. Choose the store the user names; if none is named, use the current store unless the item clearly belongs at another listed store (e.g. hardware at a hardware store, groceries at the grocery store). Choose the best section key for that store; use an empty string only if nothing fits. Ignore filler like "add", "please", "to the list". Always answer by calling add_items.`;
+
+const PLACE_TOOL = {
+  name: "place_items",
+  description: "Assign each item to a store section.",
+  input_schema: {
+    type: "object",
+    properties: {
+      placements: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { text: { type: "string" }, section: { type: "string" } },
+          required: ["text", "section"],
+        },
+      },
+    },
+    required: ["placements"],
+  },
+};
+
+const PLACE_SYSTEM = `You place shopping-list items into the sections of a specific store, the way a regular shopper there would find them. For each item, return the single best section key from the list given (exactly as written). Use the section descriptions: they name what is in each aisle. Always answer by calling place_items, with one placement per item, using the item text exactly as given.`;
+
+/** Generic tool call (for the list tools), with the same fallbacks as callClaude. */
+async function callTool(env, { system, content, tool, maxTokens = 2000 }) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model: env.IMPORT_MODEL_FAST || MODEL_FAST,
+      max_tokens: maxTokens,
+      system: system + `\n\nAlways respond by calling the ${tool.name} tool.`,
+      tools: [tool],
+      tool_choice: { type: "auto" },
+      messages: [{ role: "user", content }],
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`AI service error ${res.status}${detail ? ": " + detail.slice(0, 200) : ""}`);
+  }
+  const data = await res.json();
+  const call = data.content?.find((b) => b.type === "tool_use" && b.name === tool.name)?.input;
+  if (call) return call;
+  const text = data.content?.filter((b) => b.type === "text").map((b) => b.text).join("\n") || "";
+  const m = text.match(/\{[\s\S]*\}/);
+  if (m) { try { return JSON.parse(m[0]); } catch { /* ignore */ } }
+  return null;
+}
+
+const describeStores = (stores) =>
+  (Array.isArray(stores) ? stores : []).slice(0, 20).map((st) =>
+    `Store id "${st.id}": ${st.name}\n` +
+    ((st.sections || []).length
+      ? (st.sections || []).slice(0, 60).map((x) => `  - section "${x.key}": ${x.label}`).join("\n")
+      : "  (no sections)")
+  ).join("\n\n");
+
 /* ─────────────────────────────── helpers ─────────────────────────────── */
 
 const json = (body, status = 200) =>
@@ -307,6 +390,48 @@ export async function onRequestPost({ request, env }) {
       }));
       if (!out.recipes.length) return json({ error: "Couldn't apply that change. Try wording it differently." }, 422);
       return json({ recipes: out.recipes.slice(0, 1) });
+    }
+
+    // ── Shopping list: natural-language add ───────────────────────────────
+    if (body.mode === "items") {
+      const text = String(body.text || "").trim().slice(0, 1500);
+      const stores = Array.isArray(body.stores) ? body.stores : [];
+      if (!text || !stores.length) return json({ error: "Say or type what to add." }, 400);
+      const ids = new Set(stores.map((x) => x.id));
+      const out = await callTool(env, {
+        system: ITEMS_SYSTEM,
+        tool: ITEMS_TOOL,
+        content: `Current store: "${body.currentStore}"\n\nStores and their sections:\n${describeStores(stores)}\n\nRequest: ${text}`,
+      });
+      const items = (out?.items || [])
+        .map((i) => {
+          const st = stores.find((x) => x.id === i.store) || stores.find((x) => x.id === body.currentStore) || stores[0];
+          const secOk = (st.sections || []).some((x) => x.key === i.section);
+          return {
+            name: String(i.name || "").trim(),
+            qty: Math.max(1, Math.min(99, parseInt(i.qty) || 1)),
+            store: ids.has(i.store) ? i.store : st.id,
+            section: secOk ? i.section : "",
+          };
+        })
+        .filter((i) => i.name);
+      if (!items.length) return json({ error: "Didn't catch any items in that." }, 422);
+      return json({ items });
+    }
+
+    // ── Shopping list: place items into a store's sections ────────────────
+    if (body.mode === "place") {
+      const st = body.store;
+      const texts = (Array.isArray(body.items) ? body.items : []).map((t) => String(t).trim()).filter(Boolean).slice(0, 60);
+      if (!st?.sections?.length || !texts.length) return json({ placements: [] });
+      const out = await callTool(env, {
+        system: PLACE_SYSTEM,
+        tool: PLACE_TOOL,
+        content: `${describeStores([st])}\n\nItems:\n${texts.map((t) => "- " + t).join("\n")}`,
+      });
+      const keys = new Set(st.sections.map((x) => x.key));
+      const placements = (out?.placements || []).filter((p) => texts.includes(p.text) && keys.has(p.section));
+      return json({ placements });
     }
 
     // ── Question about a recipe (chat) ────────────────────────────────────

@@ -10,7 +10,7 @@ import {
   classifyTarget, LOWES_CATEGORIES, classifyLowes,
   classifyIngredient,
   toShoppingText, combineItems, parseAmount,
-  produceSubSort
+  produceSubSort, KEYWORD_MAP
 } from "./config.js";
 import {
   ShoppingCart, Target as TargetIcon, Hammer, Wheat, Carrot, Beef, Sandwich, Snowflake, Pizza, Wine,
@@ -19,7 +19,7 @@ import {
   Paintbrush, Leaf, TreePine, Wind, X, Pencil, Check, Sun, Star, FileText, Camera, Link2,
   AlertTriangle, ChevronLeft, ChevronRight, Search, ArrowUpDown, BookOpen, Download,
   MoreVertical, RotateCcw, Plus, Minus, Menu, Store, ShoppingBag, Trash2, MapPin,
-  Image as ImageIcon, Loader2, MessageCircle, Lightbulb, Archive
+  Image as ImageIcon, Loader2, MessageCircle, Lightbulb, Archive, Mic, Repeat
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1051,18 +1051,67 @@ function CustomItem({ item, done, sectionLabel, onToggle, onRemove, onPickSectio
 }
 
 /** Floating "add item" bar. Enter commits and keeps focus for rapid entry. */
-function AddItemBar({ qty, setQty, value, setValue, onAdd, store }) {
+/** Speech-to-text via the browser (Chrome, Edge, Safari). Returns null where unsupported. */
+const SpeechRec = typeof window !== "undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+
+/** Does this look like more than one plain item (so the AI should read it)? */
+const needsSmartAdd = (text, storeNames) => {
+  const t = text.toLowerCase();
+  if (/[,;]|\band\b|\bplus\b|\balso\b/.test(t)) return true;
+  if (storeNames.some((n) => n && t.includes(n.toLowerCase()))) return true;
+  if (/\b(from|at|for)\b/.test(t) && t.split(/\s+/).length > 3) return true;
+  return t.split(/\s+/).length > 6;
+};
+
+function AddItemBar({ qty, setQty, value, setValue, onAdd, onSmartAdd, smartBusy, toast, store, storeNames = [] }) {
   const inputRef = useRef(null);
+  const recRef = useRef(null);
+  const [listening, setListening] = useState(false);
+  const heardRef = useRef("");
 
   const commit = () => {
-    if (!value.trim()) return;
-    onAdd();
+    const v = value.trim();
+    if (!v || smartBusy) return;
+    if (onSmartAdd && needsSmartAdd(v, storeNames)) onSmartAdd(v);
+    else onAdd();
     requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const toggleMic = () => {
+    if (!SpeechRec) return;
+    if (listening) { recRef.current?.stop(); return; }
+    const rec = new SpeechRec();
+    rec.lang = "en-US";
+    rec.interimResults = true;
+    rec.continuous = false;
+    heardRef.current = "";
+    rec.onresult = (e) => {
+      const text = Array.from(e.results).map((r) => r[0].transcript).join(" ");
+      heardRef.current = text;
+      setValue(text);
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => {
+      setListening(false);
+      const heard = heardRef.current.trim();
+      if (heard && onSmartAdd) onSmartAdd(heard);
+    };
+    recRef.current = rec;
+    setListening(true);
+    try { rec.start(); } catch { setListening(false); }
   };
 
   return (
     <div className="fixed inset-x-0 float-bottom z-30 px-3 md:pl-[17rem] md:pr-4">
-      <div className="mx-auto flex max-w-lg items-center rounded-full bg-white/95 p-1 shadow-lg ring-1 ring-slate-200 backdrop-blur-xl transition-shadow duration-200 focus-within:shadow-xl focus-within:ring-2 focus-within:ring-indigo-500">
+      {toast && (
+        <div className="mx-auto mb-2 max-w-lg animate-rise rounded-2xl bg-slate-900/95 px-3.5 py-2.5 text-[12.5px] leading-snug text-white shadow-lg">
+          {toast}
+        </div>
+      )}
+      <div className={cx(
+        "mx-auto flex max-w-lg items-center rounded-full bg-white/95 p-1 shadow-lg ring-1 backdrop-blur-xl transition-shadow duration-200 focus-within:shadow-xl focus-within:ring-2 focus-within:ring-indigo-500",
+        listening ? "ring-2 ring-red-400" : "ring-slate-200"
+      )}>
         <input
           type="number" min={1} max={99}
           value={qty}
@@ -1070,7 +1119,7 @@ function AddItemBar({ qty, setQty, value, setValue, onAdd, store }) {
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); inputRef.current?.focus(); } }}
           placeholder="1"
           aria-label="Quantity"
-          className="w-12 shrink-0 bg-transparent py-2 text-center text-[15px] tabular-nums text-slate-700 placeholder:text-slate-300 focus:outline-none"
+          className="w-11 shrink-0 bg-transparent py-2 text-center text-[15px] tabular-nums text-slate-700 placeholder:text-slate-300 focus:outline-none"
         />
         <span className="h-5 w-px shrink-0 bg-slate-200" />
         <input
@@ -1078,26 +1127,110 @@ function AddItemBar({ qty, setQty, value, setValue, onAdd, store }) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } }}
-          placeholder={"Add to " + store.short + "…"}
+          placeholder={listening ? "Listening…" : smartBusy ? "Sorting it out…" : "Add to " + store.short + "… or say a few"}
           aria-label="Item name"
-          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none"
+          disabled={smartBusy}
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
         />
+        {SpeechRec && onSmartAdd && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={toggleMic}
+            disabled={smartBusy}
+            title={listening ? "Stop" : "Say what to add"}
+            className={cx(
+              "mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors",
+              listening ? "animate-pulse bg-red-500 text-white" : "text-slate-500 hover:bg-slate-100"
+            )}
+          >
+            <Mic size={17} />
+          </button>
+        )}
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={commit}
-          disabled={!value.trim()}
+          disabled={!value.trim() || smartBusy}
           className={cx(
             "flex shrink-0 items-center gap-1 rounded-full px-3.5 py-2 text-[13px] font-semibold text-white",
             "transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:active:scale-100",
             store.solid
           )}
         >
-          <Plus size={15} strokeWidth={2.75} />
+          {smartBusy ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} strokeWidth={2.75} />}
           Add
         </button>
       </div>
     </div>
+  );
+}
+
+/* ── Usuals: learned from what you add ── */
+
+const DAY = 86400000;
+const usualName = (text) => String(text).toLowerCase().replace(/^[\d./\s]+(x\s+)?/, "").replace(/\s+/g, " ").trim();
+
+/** Turn the stored history for one store into a sorted list with "due" flags. */
+const usualsFor = (hist, onList) => {
+  const now = Date.now();
+  return Object.entries(hist || {})
+    .filter(([name, u]) => u && !u.hidden && (u.n || 0) >= 2 && !onList.has(name))
+    .map(([name, u]) => {
+      const t = (u.t || []).slice().sort((a, b) => a - b);
+      const last = t[t.length - 1] || 0;
+      const every = t.length >= 2 ? (t[t.length - 1] - t[0]) / (t.length - 1) : null;
+      const since = now - last;
+      const due = every ? since >= every * 0.85 : since >= 7 * DAY;
+      return { name, label: u.label || name, qty: u.q || 1, section: u.s || "", n: u.n, every, since, due };
+    })
+    .sort((a, b) => (b.due - a.due) || (b.n - a.n));
+};
+
+const fmtDays = (ms) => {
+  const d = Math.round(ms / DAY);
+  return d <= 0 ? "today" : d === 1 ? "1 day" : d + " days";
+};
+
+function UsualsSheet({ storeName, usuals, onAdd, onForget, onClose }) {
+  const [picked, setPicked] = useState(() => new Set(usuals.filter((u) => u.due).map((u) => u.name)));
+  const toggle = (n) => setPicked((p) => { const x = new Set(p); x.has(n) ? x.delete(n) : x.add(n); return x; });
+
+  return (
+    <Sheet title="Your usuals" subtitle={storeName + " · learned from what you add"} onClose={onClose} wide>
+      {usuals.length === 0 ? (
+        <EmptyState icon={Repeat} title="Nothing learned yet" hint="Items you add more than once show up here, with a nudge when they're due." />
+      ) : (
+        <div className="flex max-h-[55vh] flex-col gap-1 overflow-y-auto">
+          {usuals.map((u) => (
+            <div key={u.name} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-slate-50">
+              <Checkbox checked={picked.has(u.name)} onChange={() => toggle(u.name)} shape="square" label={u.label} />
+              <button type="button" onClick={() => toggle(u.name)} className="min-w-0 flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[14px] font-medium text-slate-800">{u.qty > 1 ? u.qty + " " : ""}{u.label}</span>
+                  {u.due && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10.5px] font-bold text-amber-700">DUE</span>}
+                </div>
+                <div className="text-[11.5px] text-slate-400">
+                  {u.every ? "about every " + fmtDays(u.every) + " · " : ""}last added {fmtDays(u.since)} ago · {u.n}×
+                </div>
+              </button>
+              <IconBtn icon={X} size={13} title={"Stop suggesting " + u.label} onClick={() => onForget(u.name)} />
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-4 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className={BTN_GHOST}>Close</button>
+        <button
+          type="button"
+          disabled={!picked.size}
+          onClick={() => { onAdd(usuals.filter((u) => picked.has(u.name))); onClose(); }}
+          className={BTN_PRIMARY}
+        >
+          Add {picked.size || ""} to list
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
@@ -2221,6 +2354,7 @@ function AppMain() {
         const data = snap.data();
         if (data.aisleRules) setAisleRules(data.aisleRules);
         setPantry(Array.isArray(data.pantry) ? data.pantry : []);
+        setUsuals(data.usuals && typeof data.usuals === "object" ? data.usuals : {});
       }
     });
     return () => unsub();
@@ -2516,7 +2650,9 @@ function AppMain() {
     const next = { ...aisleRules };
     delete next[keyword];
     setAisleRules(next);
-    setDoc(doc(db, "app", "mbSettings"), { aisleRules: next }, { merge: true });
+    // updateDoc replaces the whole map, so the deleted rule is really gone (setDoc+merge kept it).
+    updateDoc(doc(db, "app", "mbSettings"), { aisleRules: next })
+      .catch(() => setDoc(doc(db, "app", "mbSettings"), { aisleRules: next }, { merge: true }));
   };
 
   /* ── Market Basket mutations ───────────────────────────────────────────── */
@@ -2780,6 +2916,223 @@ function AppMain() {
   };
 
   const resetCustomStore = (store) => saveStore(store.id, { items: [], checked: [] });
+
+  /* ── AI list helpers: say/type several items, AI aisle placement, usuals ── */
+  const [usuals, setUsuals] = useState({});          // { storeId: { name: { n, t:[ts], q, s, label, hidden } } }
+  const [usualsOpen, setUsualsOpen] = useState(false);
+  const [smartBusy, setSmartBusy] = useState(false);
+  const [listToast, setListToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const showToast = (msg) => {
+    setListToast(msg);
+    clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setListToast(null), 5000);
+  };
+
+  const sectionsOf = (st) =>
+    st.id === "mb" ? STORE_SECTIONS.map(({ key, label }) => ({ key, label }))
+      : st.id === "target" ? TARGET_CATEGORIES.map(({ key, label }) => ({ key, label: stripEmoji(label) }))
+        : st.id === "lowes" ? LOWES_CATEGORIES.map(({ key, label }) => ({ key, label: stripEmoji(label) }))
+          : (st.sections || []).map(({ key, label }) => ({ key, label }));
+  const aiStores = useMemo(
+    () => navStores.map((st) => ({ id: st.id, name: st.label, sections: sectionsOf(st) })),
+    [navStores]
+  );
+
+  /** Remember what gets added, per store, so "usuals" can be suggested later. */
+  const recordUsuals = (storeId, entries) => {
+    setUsuals((prev) => {
+      const now = Date.now();
+      const mine = { ...(prev[storeId] || {}) };
+      entries.forEach(({ name, qty, section }) => {
+        const k = usualName(name);
+        if (!k) return;
+        const u = mine[k] || { n: 0, t: [] };
+        const t = u.t || [];
+        const sameTrip = t.length && now - t[t.length - 1] < 6 * 3600 * 1000; // re-adding the same day counts once
+        mine[k] = {
+          ...u,
+          label: String(name).replace(/^[\d./\s]+/, "").trim() || k,
+          q: qty || 1,
+          ...(section ? { s: section } : {}),
+          n: sameTrip ? u.n || 1 : (u.n || 0) + 1,
+          t: sameTrip ? t : [...t, now].slice(-6),
+          hidden: false,
+        };
+      });
+      setDoc(doc(db, "app", "mbSettings"), { usuals: { [storeId]: mine } }, { merge: true })
+        .catch((e) => console.error("usuals save failed:", e));
+      return { ...prev, [storeId]: mine };
+    });
+  };
+  const forgetUsual = (storeId, name) => {
+    setUsuals((prev) => {
+      const mine = { ...(prev[storeId] || {}) };
+      if (mine[name]) mine[name] = { ...mine[name], hidden: true };
+      setDoc(doc(db, "app", "mbSettings"), { usuals: { [storeId]: mine } }, { merge: true }).catch(() => {});
+      return { ...prev, [storeId]: mine };
+    });
+  };
+
+  /** Add parsed items to any store's list. entries: [{ name, qty, store, section }] */
+  const addEntries = (entries) => {
+    const byStore = {};
+    entries.forEach((e) => { (byStore[e.store] = byStore[e.store] || []).push(e); });
+    const stamp = Date.now();
+    const label = (e) => (e.qty > 1 ? e.qty + " " + e.name : e.name);
+
+    Object.entries(byStore).forEach(([sid, list]) => {
+      if (sid === "mb") {
+        const added = list.map((e, i) => ({ key: "m" + stamp + "_" + i, text: label(e), recipe: "Added manually", manual: true }));
+        const u = [...manualItems, ...added];
+        setManualItems(u); saveShop({ manualItems: u });
+        const rules = {};
+        list.forEach((e) => {
+          if (e.section && classifyWithRules(e.name) !== e.section) rules[usualName(e.name)] = e.section;
+        });
+        if (Object.keys(rules).length) {
+          setAisleRules((prev) => ({ ...prev, ...rules }));
+          setDoc(doc(db, "app", "mbSettings"), { aisleRules: rules }, { merge: true });
+        }
+      } else if (sid === "target" || sid === "lowes") {
+        const cats = sid === "target" ? TARGET_CATEGORIES : LOWES_CATEGORIES;
+        const cls = sid === "target" ? classifyTarget : classifyLowes;
+        const added = list.map((e, i) => ({
+          key: (sid === "target" ? "t" : "l") + stamp + "_" + i,
+          text: label(e),
+          category: cats.some((c) => c.key === e.section && c.key !== "other") ? e.section : cls(e.name),
+        }));
+        if (sid === "target") {
+          const u = [...targetItems, ...added];
+          setTargetItems(u);
+          setDoc(doc(db, "app", "target"), { items: u, checked: [...targetChecked] }, { merge: true });
+        } else {
+          const u = [...lowesItems, ...added];
+          setLowesItems(u);
+          setDoc(doc(db, "app", "lowes"), { items: u, checked: [...lowesChecked] }, { merge: true });
+        }
+      } else {
+        const st = navStores.find((x) => x.id === sid);
+        if (!st) return;
+        const added = list.map((e, i) => ({
+          key: "c" + stamp + "_" + i,
+          text: label(e),
+          sectionKey: st.sections.some((x) => x.key === e.section) ? e.section : null,
+        }));
+        saveStore(sid, { items: [...st.items, ...added] });
+      }
+      recordUsuals(sid, list);
+    });
+  };
+
+  const storeLabel = (sid) => navStores.find((x) => x.id === sid)?.label || sid;
+
+  /** Hand free-form text (typed or spoken) to the AI and add whatever it finds. */
+  const smartAdd = async (text, clearInput) => {
+    setSmartBusy(true);
+    try {
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "items", text, currentStore: storeTab, stores: aiStores }),
+      });
+      let data = {};
+      try { data = await res.json(); } catch { /* ignore */ }
+      if (!res.ok) throw new Error(data.error || "AI unavailable");
+      addEntries(data.items);
+      clearInput?.();
+      const groups = {};
+      data.items.forEach((i) => { (groups[i.store] = groups[i.store] || []).push(i.qty > 1 ? i.qty + " " + i.name : i.name); });
+      showToast(
+        <span>
+          <b>Added:</b>{" "}
+          {Object.entries(groups).map(([sid, names], k) => (
+            <span key={sid}>{k > 0 && " · "}{names.join(", ")} <span className="text-slate-400">→ {storeLabel(sid)}</span></span>
+          ))}
+        </span>
+      );
+    } catch (e) {
+      // AI down: add it as typed, as one item, so nothing is lost.
+      addEntries([{ name: text, qty: 1, store: storeTab, section: "" }]);
+      clearInput?.();
+      showToast("Added as one item (" + (e.message || "AI unavailable") + ")");
+    }
+    setSmartBusy(false);
+  };
+
+  /* AI aisle placement: anything the keyword rules can't place gets one quiet AI pass. */
+  const placedRef = useRef(null);
+  if (placedRef.current === null) {
+    try { placedRef.current = new Set(JSON.parse(localStorage.getItem("dl.placed.v1") || "[]")); }
+    catch { placedRef.current = new Set(); }
+  }
+  const isMbUnplaced = (text) => {
+    const lower = text.toLowerCase();
+    if (Object.keys(aisleRules).some((k) => lower.includes(k))) return false;
+    return classifyIngredient(text) === "kitchen" && !(KEYWORD_MAP.kitchen || []).some((k) => lower.includes(k));
+  };
+
+  useEffect(() => {
+    if (!authReady) return;
+    const fresh = (sid, texts) =>
+      [...new Set(texts.map(usualName))].filter((t) => t && !placedRef.current.has(sid + "::" + t)).slice(0, 40);
+    const jobs = [];
+    const mb = fresh("mb", allShoppingItems.filter((i) => isMbUnplaced(i.text)).map((i) => parseAmount(i.text).name || i.text));
+    if (mb.length) jobs.push({ sid: "mb", texts: mb });
+    const tg = fresh("target", targetItems.filter((i) => i.category === "other").map((i) => i.text));
+    if (tg.length) jobs.push({ sid: "target", texts: tg });
+    const lw = fresh("lowes", lowesItems.filter((i) => i.category === "other").map((i) => i.text));
+    if (lw.length) jobs.push({ sid: "lowes", texts: lw });
+    navStores.filter((st) => !st.builtIn && st.sections.length).forEach((st) => {
+      const cs = fresh(st.id, st.items.filter((i) => !i.sectionKey || !st.sections.some((x) => x.key === i.sectionKey)).map((i) => i.text));
+      if (cs.length) jobs.push({ sid: st.id, texts: cs });
+    });
+    if (!jobs.length) return;
+
+    const timer = setTimeout(async () => {
+      for (const job of jobs) {
+        job.texts.forEach((t) => placedRef.current.add(job.sid + "::" + t));
+        try { localStorage.setItem("dl.placed.v1", JSON.stringify([...placedRef.current].slice(-1500))); } catch { /* ignore */ }
+        const st = aiStores.find((x) => x.id === job.sid);
+        if (!st) continue;
+        let placements = [];
+        try {
+          const res = await fetch("/api/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "place", store: st, items: job.texts }),
+          });
+          if (!res.ok) continue;
+          placements = (await res.json()).placements || [];
+        } catch { continue; }
+        const where = Object.fromEntries(placements.map((p) => [p.text, p.section]));
+
+        if (job.sid === "mb") {
+          const rules = {};
+          placements.forEach((p) => { if (p.section !== "kitchen") rules[p.text] = p.section; });
+          if (Object.keys(rules).length) {
+            setAisleRules((prev) => ({ ...prev, ...rules }));
+            setDoc(doc(db, "app", "mbSettings"), { aisleRules: rules }, { merge: true });
+          }
+        } else if (job.sid === "target" || job.sid === "lowes") {
+          const setFn = job.sid === "target" ? setTargetItems : setLowesItems;
+          setFn((prev) => {
+            const u = prev.map((i) => (i.category === "other" && where[usualName(i.text)] && where[usualName(i.text)] !== "other"
+              ? { ...i, category: where[usualName(i.text)] } : i));
+            setDoc(doc(db, "app", job.sid), { items: u }, { merge: true });
+            return u;
+          });
+        } else {
+          const cur = navStores.find((x) => x.id === job.sid);
+          if (!cur) continue;
+          saveStore(job.sid, {
+            items: cur.items.map((i) => (!i.sectionKey && where[usualName(i.text)] ? { ...i, sectionKey: where[usualName(i.text)] } : i)),
+          });
+        }
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [allShoppingItems, targetItems, lowesItems, navStores, aisleRules, authReady]);
 
   /* ── Recipes ───────────────────────────────────────────────────────────── */
   const toggleFav = async (id, e) => {
@@ -3346,6 +3699,26 @@ function AppMain() {
   const setQtyVal = isCustom
     ? (v) => setCustomQty((p) => ({ ...p, [store.id]: v }))
     : storeTab === "mb" ? setManualQty : storeTab === "target" ? setTargetQty : setLowesQty;
+
+  /** A single typed item: add it straight away (the AI only steps in to place it if needed). */
+  const plainAdd = () => {
+    const name = inputVal.trim();
+    if (!name) return;
+    addEntries([{ name, qty: parseInt(qtyVal) || 1, store: store.id, section: "" }]);
+    setInputVal(""); setQtyVal("");
+  };
+
+  /* What's on this store's list right now (so usuals don't suggest it). */
+  const onListNames = new Set(
+    (isCustom
+      ? store.items.filter((i) => !store.checked.includes(i.key))
+      : storeTab === "mb" ? allShoppingItems.filter((i) => !checkedItems.has(i.key))
+        : storeTab === "target" ? targetItems.filter((i) => !targetChecked.has(i.key))
+          : lowesItems.filter((i) => !lowesChecked.has(i.key))
+    ).map((i) => usualName(i.text))
+  );
+  const storeUsuals = usualsFor(usuals[store.id], onListNames);
+  const dueUsuals = storeUsuals.filter((u) => u.due);
   const resetFn = isCustom
     ? () => resetCustomStore(store)
     : storeTab === "mb" ? resetShopping : storeTab === "target" ? resetTarget : resetLowes;
@@ -3377,6 +3750,12 @@ function AppMain() {
       label: "Pantry staples",
       hint: pantry.length ? String(pantry.length) : undefined,
       onClick: () => setPantryOpen(true),
+    },
+    {
+      icon: Repeat,
+      label: "Usuals",
+      hint: dueUsuals.length ? dueUsuals.length + " due" : undefined,
+      onClick: () => setUsualsOpen(true),
     },
     {
       icon: Sun,
@@ -3442,6 +3821,20 @@ function AppMain() {
                 don't cover the <code className="font-mono">stores</code> collection yet.
               </span>
             </div>
+          )}
+
+          {dueUsuals.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setUsualsOpen(true)}
+              className="mb-3 flex w-full items-center gap-2.5 rounded-xl bg-indigo-50 px-3 py-2.5 text-left text-[13px] text-indigo-900 ring-1 ring-indigo-100"
+            >
+              <Repeat size={15} className="shrink-0 text-indigo-600" />
+              <span className="min-w-0 flex-1 truncate">
+                <b>{dueUsuals.length} usual{dueUsuals.length !== 1 ? "s" : ""} due:</b> {dueUsuals.map((u) => u.label).join(", ")}
+              </span>
+              <span className="shrink-0 font-semibold text-indigo-600">Review</span>
+            </button>
           )}
 
           {/* ── Market Basket ── */}
@@ -3602,7 +3995,28 @@ function AppMain() {
         </main>
       </div>
 
-      <AddItemBar qty={qtyVal} setQty={setQtyVal} value={inputVal} setValue={setInputVal} onAdd={addFn} store={store} />
+      {usualsOpen && (
+        <UsualsSheet
+          storeName={store.label}
+          usuals={storeUsuals}
+          onForget={(name) => forgetUsual(store.id, name)}
+          onAdd={(list) => {
+            addEntries(list.map((u) => ({ name: u.label, qty: u.qty, store: store.id, section: u.section })));
+            showToast("Added " + list.length + " usual" + (list.length !== 1 ? "s" : "") + " to " + store.label);
+          }}
+          onClose={() => setUsualsOpen(false)}
+        />
+      )}
+
+      <AddItemBar
+        qty={qtyVal} setQty={setQtyVal} value={inputVal} setValue={setInputVal}
+        onAdd={plainAdd}
+        onSmartAdd={(t) => smartAdd(t, () => { setInputVal(""); setQtyVal(""); })}
+        smartBusy={smartBusy}
+        toast={listToast}
+        store={store}
+        storeNames={[...navStores.map((x) => x.label), "lowes", "target", "market basket"]}
+      />
     </div>
   );
 }
