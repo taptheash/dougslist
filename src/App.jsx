@@ -10,7 +10,7 @@ import {
   classifyTarget, LOWES_CATEGORIES, classifyLowes,
   classifyIngredient,
   toShoppingText, combineItems, parseAmount,
-  produceSubSort, KEYWORD_MAP
+  produceSubSort, KEYWORD_MAP, PREP_STRIP
 } from "./config.js";
 import {
   ShoppingCart, Target as TargetIcon, Hammer, Wheat, Carrot, Beef, Sandwich, Snowflake, Pizza, Wine,
@@ -862,7 +862,7 @@ function TimerTray() {
 
 function MBItem({
   item, sec, isEd, editingText, setEditingText, editingQty, setEditingQty,
-  onToggle, onEdit, onSaveEdit, onCancelEdit, onRemove, onAislePick,
+  onToggle, onEdit, onSaveEdit, onCancelEdit, onRemove, onAislePick, onPantry,
   recipes, setSelectedId, setView,
 }) {
   const rnames = item.recipeList || [item.recipe];
@@ -953,6 +953,7 @@ function MBItem({
 
       {!isEd && <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
         <IconBtn icon={Pencil} size={13} title="Edit item" onClick={(e) => onEdit(item.key, item.text, e)} />
+        {onPantry && <IconBtn icon={Archive} size={13} title="Always have this — add to pantry staples" onClick={() => onPantry(item)} tone="text-slate-400 hover:bg-amber-50 hover:text-amber-600" />}
         <IconBtn icon={X} size={14} title="Remove item" onClick={() => onRemove(item.key)} tone="text-slate-400 hover:bg-red-50 hover:text-red-600" />
       </div>}
 
@@ -2697,6 +2698,17 @@ function AppMain() {
     () => [...new Set(rawShoppingItems.filter((i) => !i.manual && isPantryStaple(i.text, pantry)).map((i) => i.text.toLowerCase()))],
     [rawShoppingItems, pantry]
   );
+  /** "I always have this": add the item to pantry staples (recipe copies then drop off the list). */
+  const markPantry = (item) => {
+    const name = (parseAmount(item.text).name || item.text).replace(PREP_STRIP, "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!name) return;
+    if (!pantry.includes(name)) savePantry([...pantry, name]);
+    // Hand-added items always show, so take this one off too.
+    const manualKeys = (item.keys || [item.key]).filter((k) => k.startsWith("m"));
+    if (manualKeys.length) removeKeys(manualKeys);
+    showToast(<span>Added <b>{name}</b> to pantry staples. <span className="text-slate-400">Undo in ⋮ → Pantry staples.</span></span>);
+  };
+
   const savePantry = (next) => {
     setPantry(next);
     setDoc(doc(db, "app", "mbSettings"), { pantry: next }, { merge: true }).catch((e) => console.error("pantry save failed:", e));
@@ -4230,6 +4242,7 @@ function AppMain() {
                               onCancelEdit={() => setEditingKey(null)}
                               onRemove={() => removeKeys(item.keys || [item.key])}
                               onAislePick={handleAislePick}
+                              onPantry={markPantry}
                               recipes={recipes}
                               setSelectedId={setSelectedId}
                               setView={setView}
