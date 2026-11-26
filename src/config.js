@@ -235,7 +235,22 @@ export const PRODUCE_CONVERSIONS = [
   { match: /spinach|kale|arugula/i, unit: /(\d*\.?\d+)\s*cup/i, out: (_,a,__,raw) => { const l=(raw||"").match(/spinach|kale|arugula/i); return `${a<=2?"5 oz":"10 oz"} ${l?l[0]:"spinach"}`; } },
 ];
 
-export const toShoppingText = (raw) => {
+export const toShoppingText = (input) => {
+  // Tidy the line first so the rules below see the real item:
+  //  - "(or 1–2 tsp garlic powder)" alternatives are dropped (they used to trip the spice rule),
+  //  - "Optional:" is dropped,
+  //  - ranges like "3–4", "3-4" or "3 to 4" become the larger amount (buy enough).
+  const raw = String(input)
+    .replace(/\(\s*(?:or|about|approx\.?|optional)\b[^)]*\)/gi, " ")
+    .replace(/^\s*optional\s*:?\s*/i, "")
+    .replace(/(\d+(?:\.\d+)?(?:\/\d+)?)\s*(–|—|-|to)\s*(\d+(?:\.\d+)?(?:\/\d+)?)/gi, (m, a, sep, b) => {
+      // "1-1/2 cups" is a mixed number (one and a half), not a range.
+      const f = b.match(/^(\d+)\/(\d+)$/);
+      if (sep === "-" && /^\d+$/.test(a) && f && +f[1] < +f[2]) return a + " " + b;
+      return b;
+    })
+    .replace(/\s{2,}/g, " ")
+    .trim();
   const lower = raw.toLowerCase();
   if (lower.includes("wine")) return raw.replace(/^[\d\s./]+\s*(cup|cups|tbsp|tsp|oz|ml|l)?\s*/i, "").replace(PREP_STRIP, "").trim();
   if (lower.includes("frozen")) return raw.trim();
@@ -266,7 +281,13 @@ export const toShoppingText = (raw) => {
   }
   let cleaned = raw.replace(PREP_STRIP, "").replace(/,\s*$/, "").trim();
   // Any other trailing ", cut into pieces"-style note isn't needed on a shopping list.
-  if (cleaned.includes(",")) { const head = cleaned.split(",")[0].trim(); if (/[a-z]{3,}/i.test(head.replace(/^[\d./\s]+/, ""))) cleaned = head; }
+  // Only when what follows the comma is a prep note — "boneless, skinless chicken breasts" keeps its noun.
+  if (cleaned.includes(",")) {
+    const [head, ...tail] = cleaned.split(",");
+    const after = tail.join(",").trim().toLowerCase();
+    const prepNote = /^(cut|torn|chopped|diced|minced|sliced|cubed|peeled|trimmed|grated|shredded|crushed|halved|quartered|drained|rinsed|thawed|softened|melted|beaten|divided|optional|plus|or more|about|roughly|finely|thinly|coarsely|at room|room temp|to taste|for |as needed|seeded|stemmed|julienned|patted|pounded|separated|crumbled|zested|juiced)/;
+    if (prepNote.test(after) && /[a-z]{3,}/i.test(head.replace(/^[\d./\s]+/, ""))) cleaned = head.trim();
+  }
   cleaned = cleaned.replace(COOK_WORDS, "").replace(/\s{2,}/g, " ").replace(/,\s*$/, "").trim();
   return cleaned || raw;
 };
