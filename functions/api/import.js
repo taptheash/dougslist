@@ -223,8 +223,12 @@ const RECIPE_FIELDS = {
 };
 
 const AGENT_TOOLS = [
-  { name: "search_recipes", description: "Search the household's saved recipes by words in the title or ingredients, and/or by category. With no arguments, lists every recipe (titles only).",
-    input_schema: { type: "object", properties: { query: { type: "string" }, category: { type: "string", enum: CATEGORIES } } } },
+  { name: "search_recipes", description: "Search the household's saved recipes by words in the title or ingredients, by category, and/or by the household's own star rating (1-5). With no arguments, lists every recipe. Results include rating (0 = not rated yet) and favorite.",
+    input_schema: { type: "object", properties: { query: { type: "string" }, category: { type: "string", enum: CATEGORIES }, min_rating: { type: "integer", minimum: 1, maximum: 5 } } } },
+  { name: "show_recipes", description: "Show recipe cards in the chat that the user can tap to open. Use this whenever you recommend or find saved recipes, in the order you'd suggest them.",
+    input_schema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } } }, required: ["ids"] } },
+  { name: "rate_recipe", description: "Set the household's star rating for a recipe (1-5), only when the user tells you their rating.",
+    input_schema: { type: "object", properties: { id: { type: "string" }, rating: { type: "integer", minimum: 1, maximum: 5 } }, required: ["id", "rating"] } },
   { name: "get_recipe", description: "Read one saved recipe in full.",
     input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
   { name: "create_recipe", description: "Save a new recipe to the collection. Use for dishes the user wants that aren't saved yet. Returns its id.",
@@ -252,6 +256,7 @@ const AGENT_TOOLS = [
 const agentSystem = (ctx) => `You are the assistant inside Doug's List, a household app with a recipe collection and shopping lists for several stores. You don't just answer — you get things done by using the tools, taking as many steps as the job needs, then reporting back.
 
 How to work
+- Ratings are the household's own 1-5 stars. "A 4 star fish recipe" means rating 4 or higher (min_rating 4) in Fish & Seafood, searching by category and fish words. When you find or recommend saved recipes, call show_recipes so they can tap straight to them; if nothing meets the rating, say so and show the closest ones.
 - Look before you act: search the saved recipes before writing a new one, and check a list before adding duplicates.
 - If the user wants a dish that isn't saved, write a reliable, well-tested version and save it with create_recipe (same formatting as the rest of the collection). Then use it like any other recipe.
 - When the user gives a head count, set_servings first, then add_recipe_to_list, so list amounts match.

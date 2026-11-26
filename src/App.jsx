@@ -2231,13 +2231,32 @@ function IdeasSheet({ existingTitles, onAdd, onOpen, onClose }) {
   );
 }
 
+/** 1-5 stars. Read-only unless onChange is given; tap the current rating again to clear it. */
+function StarRating({ value = 0, onChange, size = 18 }) {
+  const [hover, setHover] = useState(0);
+  const shown = hover || value;
+  return (
+    <span className="inline-flex items-center" onMouseLeave={() => setHover(0)}>
+      {[1, 2, 3, 4, 5].map((n) => {
+        const icon = <Star size={size} className={n <= shown ? "fill-amber-400 text-amber-400" : "text-slate-300"} />;
+        return onChange ? (
+          <button key={n} type="button" onMouseEnter={() => setHover(n)} onClick={() => onChange(n === value ? 0 : n)}
+            className="p-0.5 transition-transform active:scale-90" aria-label={n + " star" + (n > 1 ? "s" : "")}>
+            {icon}
+          </button>
+        ) : <span key={n}>{icon}</span>;
+      })}
+    </span>
+  );
+}
+
 /* ── Assistant: chat that works the app through tools ── */
 
 /** One-line description of a tool step, shown in the chat as the assistant works. */
 const describeStep = (name, input = {}, recipeTitle, storeName = (x) => x) => {
   const t = (id) => recipeTitle(id) || "a recipe";
   switch (name) {
-    case "search_recipes": return "Looked through your recipes" + (input.query ? " for “" + input.query + "”" : input.category ? " in " + input.category : "");
+    case "search_recipes": return "Looked through your recipes" + (input.query ? " for “" + input.query + "”" : "") + (input.category ? " in " + input.category : "") + (input.min_rating ? " rated " + input.min_rating + "★+" : "");
     case "get_recipe": return "Read " + t(input.id);
     case "create_recipe": return "Wrote and saved “" + (input.title || "a new recipe") + "”";
     case "update_recipe": return "Updated " + t(input.id);
@@ -2248,11 +2267,13 @@ const describeStep = (name, input = {}, recipeTitle, storeName = (x) => x) => {
     case "get_list": return "Checked the " + storeName(input.store) + " list";
     case "get_usuals": return "Checked your " + storeName(input.store) + " usuals";
     case "get_pantry": return "Checked your pantry staples";
+    case "show_recipes": return null;
+    case "rate_recipe": return "Rated " + t(input.id) + " " + "★".repeat(input.rating || 0);
     default: return name;
   }
 };
 
-function AssistantSheet({ messages, busy, error, onSend, onReset, onClose, recipeTitle, storeName }) {
+function AssistantSheet({ messages, busy, error, onSend, onReset, onClose, recipeTitle, storeName, getRecipe, onOpenRecipe }) {
   const [input, setInput] = useState("");
   const endRef = useRef(null);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, busy]);
@@ -2266,7 +2287,8 @@ function AssistantSheet({ messages, busy, error, onSend, onReset, onClose, recip
     }
     (m.content || []).forEach((b, j) => {
       if (b.type === "text" && b.text.trim()) rows.push({ kind: "assistant", text: b.text.trim(), k: i + "-" + j });
-      if (b.type === "tool_use") rows.push({ kind: "step", text: describeStep(b.name, b.input, recipeTitle, storeName), k: i + "-" + j });
+      if (b.type === "tool_use" && b.name === "show_recipes") rows.push({ kind: "cards", ids: b.input?.ids || [], k: i + "-" + j });
+      else if (b.type === "tool_use") rows.push({ kind: "step", text: describeStep(b.name, b.input, recipeTitle, storeName), k: i + "-" + j });
     });
   });
 
@@ -2281,7 +2303,7 @@ function AssistantSheet({ messages, busy, error, onSend, onReset, onClose, recip
     "Plan 2 dinners for this week and put them on my list",
     "We're having 8 people Saturday — make the fish chowder and something for dessert",
     "What usuals am I due for? Add them",
-    "Something high-protein in the cast iron tonight with what's on my list",
+    "Show me my 4-star fish recipes",
   ];
 
   return (
@@ -2299,7 +2321,23 @@ function AssistantSheet({ messages, busy, error, onSend, onReset, onClose, recip
         )}
 
         {rows.map((r) =>
-          r.kind === "step" ? (
+          r.kind === "cards" ? (
+            <div key={r.k} className="flex flex-col gap-1.5">
+              {r.ids.map((id) => getRecipe(id)).filter(Boolean).map((rc) => (
+                <button key={rc.id} type="button" onClick={() => onOpenRecipe(rc.id)}
+                  className={cx(CARD, "flex items-center gap-3 px-3.5 py-2.5 text-left hover:ring-indigo-300")}>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-semibold text-slate-900">{rc.title}</div>
+                    <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-slate-400">
+                      {rc.rating ? <StarRating value={rc.rating} size={11} /> : <span>Not rated</span>}
+                      <span>· {catsOf(rc).join(", ")}</span>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="shrink-0 text-slate-300" />
+                </button>
+              ))}
+            </div>
+          ) : r.kind === "step" && !r.text ? null : r.kind === "step" ? (
             <div key={r.k} className="flex items-start gap-2 pl-1 text-[12.5px] text-slate-500">
               <Check size={13} className="mt-0.5 shrink-0 text-emerald-500" /> <span>{r.text}</span>
             </div>
@@ -3544,10 +3582,14 @@ function AppMain() {
   const favCount = recipes.filter((r) => r.favorite).length;
   /* Search looks across every recipe (title, categories, ingredients, notes), whatever tab is
      open. Every word must match somewhere; title hits rank first. Plurals are forgiven. */
-  const searchWords = search.toLowerCase().split(/[\s,]+/).map((w) => w.trim()).filter((w) => w.length > 1);
+  // "4 star", "4 stars", "4★" or "4+" in the search box means rated 4 or higher.
+  const ratingMatch = search.toLowerCase().match(/\b([1-5])\s*(?:-?\s*stars?|★|\+)/);
+  const minRating = ratingMatch ? parseInt(ratingMatch[1]) : 0;
+  const searchWords = search.toLowerCase().replace(/\b[1-5]\s*(?:-?\s*stars?|★|\+)/, " ")
+    .split(/[\s,]+/).map((w) => w.trim()).filter((w) => w.length > 1 && !["recipe", "recipes", "rated", "with", "the"].includes(w));
   const filtered = useMemo(() => {
     const byName = (a, b) => (sortAZ ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title));
-    if (searchWords.length) {
+    if (searchWords.length || minRating) {
       const stem = (w) => w.replace(/(es|s)$/, "");
       const has = (hay, w) => hay.includes(w) || hay.includes(stem(w));
       return recipes
@@ -3556,19 +3598,20 @@ function AppMain() {
           const cats = catsOf(r).join(" ").toLowerCase();
           const ings = r.ingredients.join(" | ").toLowerCase();
           const rest = ((r.notes || "") + " " + r.instructions.join(" ")).toLowerCase();
+          if ((r.rating || 0) < minRating) return null;
           if (!searchWords.every((w) => has(title, w) || has(cats, w) || has(ings, w) || has(rest, w))) return null;
           const score = searchWords.reduce((n, w) => n + (has(title, w) ? 4 : has(cats, w) ? 2 : has(ings, w) ? 1 : 0), 0);
           const hit = r.ingredients.find((i) => searchWords.some((w) => has(i.toLowerCase(), w) && !has(title, w)));
           return { ...r, _score: score, _hit: hit };
         })
         .filter(Boolean)
-        .sort((a, b) => b._score - a._score || byName(a, b));
+        .sort((a, b) => b._score - a._score || (b.rating || 0) - (a.rating || 0) || byName(a, b));
     }
     let list = recipes;
     if (activeTab === "Favorites") list = list.filter((r) => r.favorite);
     else if (activeTab !== "All") list = list.filter((r) => catsOf(r).includes(activeTab));
     return [...list].sort(byName);
-  }, [recipes, activeTab, search, sortAZ]);
+  }, [recipes, activeTab, search, sortAZ, minRating]);
 
   const selected = recipes.find((r) => r.id === selectedId);
 
@@ -3647,7 +3690,7 @@ function AppMain() {
   const runTool = async (name, input = {}) => {
     const A = agentRef.current;
     const findR = (id) => A.recipes.find((r) => r.id === id);
-    const brief = (r) => ({ id: r.id, title: r.title, categories: catsOf(r), servings: r.servings, favorite: !!r.favorite, onList: A.checkedIds.has(r.id) });
+    const brief = (r) => ({ id: r.id, title: r.title, categories: catsOf(r), servings: r.servings, rating: r.rating || 0, favorite: !!r.favorite, onList: A.checkedIds.has(r.id) });
     const activeOn = (sid) => {
       if (sid === "mb") return A.allShoppingItems.filter((i) => !A.checkedItems.has(i.key)).map((i) => i.text + (i.manual ? "" : " (for " + i.recipe + ")"));
       if (sid === "target") return A.targetItems.filter((i) => !A.targetChecked.has(i.key)).map((i) => i.text);
@@ -3663,6 +3706,7 @@ function AppMain() {
         const words = q.split(/\s+/).filter((w) => w.length > 1);
         let list = A.recipes;
         if (input.category) list = list.filter((r) => catsOf(r).includes(input.category));
+        if (input.min_rating) list = list.filter((r) => (r.rating || 0) >= input.min_rating);
         if (words.length) list = list.filter((r) => {
           const hay = (r.title + " " + catsOf(r).join(" ") + " " + r.ingredients.join(" ")).toLowerCase();
           return words.some((w) => hay.includes(w));
@@ -3739,6 +3783,17 @@ function AppMain() {
         if (!items) return { error: "Unknown store id." };
         return { store: input.store, items, ...(input.store === "mb" ? { skippedPantryStaples: A.skippedStaples } : {}) };
       }
+      case "show_recipes": {
+        const found = (input.ids || []).filter((id) => findR(id));
+        return { shown: found.length, missing: (input.ids || []).length - found.length };
+      }
+      case "rate_recipe": {
+        const r = findR(input.id);
+        if (!r) return { error: "No recipe with that id." };
+        const v = Math.max(1, Math.min(5, parseInt(input.rating) || 0));
+        await updateDoc(doc(db, "recipes", r.id), { rating: v });
+        return { id: r.id, rating: v };
+      }
       case "get_pantry":
         return { staples: A.pantry };
       case "get_usuals": {
@@ -3803,6 +3858,8 @@ function AppMain() {
       onClose={() => setAssistantOpen(false)}
       recipeTitle={recipeTitle}
       storeName={(id) => navStores.find((x) => x.id === id)?.label || id}
+      getRecipe={(id) => recipes.find((r) => r.id === id)}
+      onOpenRecipe={(id) => { setAssistantOpen(false); setView("recipes"); setSelectedId(id); }}
     />
   );
 
@@ -4027,6 +4084,17 @@ function AppMain() {
                   />
                 </div>
 
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-[11.5px] font-medium text-slate-400">Your rating:</span>
+                  <StarRating
+                    value={selected.rating || 0}
+                    onChange={(v) => {
+                      setRecipes((rs) => rs.map((r) => (r.id === selected.id ? { ...r, rating: v } : r)));
+                      updateDoc(doc(db, "recipes", selected.id), { rating: v ? v : deleteField() });
+                    }}
+                  />
+                  {!selected.rating && <span className="text-[11.5px] text-slate-400">tap to rate</span>}
+                </div>
                 <div className="mb-3 flex flex-wrap items-center gap-1.5">
                   <span className="text-[11.5px] font-medium text-slate-400">Found in:</span>
                   {catsOf(selected).map((c, ci) => (
@@ -4242,7 +4310,7 @@ function AppMain() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Escape" && setSearch("")}
-                placeholder="Search all recipes — name, ingredient, category…"
+                placeholder="Search recipes — name, ingredient, category, “4 star”…"
                 className="w-full rounded-full bg-slate-100 py-2.5 pl-10 pr-9 text-[14.5px] text-slate-900 ring-1 ring-transparent transition-shadow duration-150 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               {search && (
@@ -4256,7 +4324,7 @@ function AppMain() {
                 </button>
               )}
             </div>
-            {!searchWords.length && (
+            {!searchWords.length && !minRating && (
             <div className="no-scrollbar flex gap-1.5 overflow-x-auto px-4 pb-2.5">
               {CATEGORIES.map((cat) => {
                 const on = activeTab === cat;
@@ -4306,12 +4374,12 @@ function AppMain() {
                 {catPass.error && <button type="button" onClick={() => { setCatPass(null); runCategoryPass(false); }} className="shrink-0 font-semibold underline">Try again</button>}
               </div>
             )}
-            {searchWords.length > 0 && (
+            {(searchWords.length > 0 || minRating > 0) && (
               <p className="mb-2 px-1 text-[12.5px] text-slate-500">
                 {filtered.length} recipe{filtered.length !== 1 ? "s" : ""} match “{search.trim()}” across all categories
               </p>
             )}
-            {searchWords.length > 0 && filtered.length === 0 ? (
+            {(searchWords.length > 0 || minRating > 0) && filtered.length === 0 ? (
               <div className="mt-6 text-center">
                 <p className="text-[14px] font-semibold text-slate-700">Nothing saved matches “{search.trim()}”.</p>
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -4345,6 +4413,7 @@ function AppMain() {
                           <span key={c} className={cx("rounded-full px-2 py-px text-[10.5px] font-semibold",
                             ci === 0 ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-500")}>{c}</span>
                         ))}
+                        {r.rating > 0 && <StarRating value={r.rating} size={11} />}
                         <span className="text-[11.5px] text-slate-400">· {r.servings} servings</span>
                       </div>
                       {r._hit && <p className="mt-1 truncate text-[11.5px] text-slate-500">has: {r._hit}</p>}
