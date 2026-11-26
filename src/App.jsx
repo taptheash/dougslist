@@ -1459,24 +1459,53 @@ function ImportSheet({ onClose, onSave }) {
   );
 }
 
-/** One recipe in the review step: editable fields plus "ask for a change". */
-function DraftEditor({ draft, onChange, onRemove }) {
+/** "Ask for a change" box: sends the recipe + request to the AI and hands back the revised recipe. */
+function AiChangeBox({ getRecipe, onApply }) {
   const [ask, setAsk] = useState("");
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState(null);
-  const set = (k) => (e) => onChange({ ...draft, [k]: e.target.value });
-  const ingCount = draft.ingredients.split("\n").filter((l) => l.trim()).length;
-  const stepCount = draft.instructions.split("\n").filter((l) => l.trim()).length;
 
   const refine = async () => {
-    if (!ask.trim()) return;
+    if (!ask.trim() || asking) return;
     setAsking(true); setAskError(null);
     try {
-      const [r] = await postImport({ mode: "refine", recipe: fromDraft(draft), instruction: ask.trim() });
-      if (r) { onChange(toDraft(r)); setAsk(""); }
+      const [r] = await postImport({ mode: "refine", recipe: getRecipe(), instruction: ask.trim() });
+      if (r) { onApply(r); setAsk(""); }
     } catch (e) { setAskError(e.message); }
     setAsking(false);
   };
+
+  return (
+    <div className="rounded-xl bg-indigo-50/60 p-3 ring-1 ring-indigo-100">
+      <div className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-indigo-700">
+        <Sparkles size={13} /> Ask for a change
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={ask}
+          onChange={(e) => setAsk(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && refine()}
+          disabled={asking}
+          placeholder="e.g. make it serve 2 · adapt for cast iron · lower-glycemic swaps"
+          className={cx(INPUT, "text-[13.5px]")}
+        />
+        <button type="button" disabled={!ask.trim() || asking} onClick={refine} className={cx(BTN_PRIMARY, "shrink-0")}>
+          {asking ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+        </button>
+      </div>
+      <p className="mt-2 text-[11.5px] text-slate-400">
+        {asking ? "Rewriting the recipe…" : "The fields update so you can check them. Nothing is saved until you tap Save."}
+      </p>
+      {askError && <p className="mt-1 text-[12px] text-red-600">{askError}</p>}
+    </div>
+  );
+}
+
+/** One recipe in the review step: editable fields plus "ask for a change". */
+function DraftEditor({ draft, onChange, onRemove }) {
+  const set = (k) => (e) => onChange({ ...draft, [k]: e.target.value });
+  const ingCount = draft.ingredients.split("\n").filter((l) => l.trim()).length;
+  const stepCount = draft.instructions.split("\n").filter((l) => l.trim()).length;
 
   return (
     <div className={cx(CARD, "p-4")}>
@@ -1515,25 +1544,7 @@ function DraftEditor({ draft, onChange, onRemove }) {
         </Field>
       </div>
 
-      <div className="rounded-xl bg-indigo-50/60 p-3 ring-1 ring-indigo-100">
-        <div className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-indigo-700">
-          <Sparkles size={13} /> Ask for a change
-        </div>
-        <div className="flex gap-2">
-          <input
-            value={ask}
-            onChange={(e) => setAsk(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && refine()}
-            disabled={asking}
-            placeholder="e.g. make it serve 2 · adapt for cast iron · lower-glycemic swaps"
-            className={cx(INPUT, "text-[13.5px]")}
-          />
-          <button type="button" disabled={!ask.trim() || asking} onClick={refine} className={cx(BTN_PRIMARY, "shrink-0")}>
-            {asking ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
-          </button>
-        </div>
-        {askError && <p className="mt-2 text-[12px] text-red-600">{askError}</p>}
-      </div>
+      <AiChangeBox getRecipe={() => fromDraft(draft)} onApply={(r) => onChange(toDraft(r))} />
     </div>
   );
 }
@@ -2384,6 +2395,7 @@ export default function App() {
                       onClick={toggleWakeLock}
                       tone={wakeActive ? "bg-amber-50 text-amber-500" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"}
                     />
+                    <IconBtn icon={Pencil} size={17} title="Edit recipe" onClick={() => startEditRecipe(selected)} />
                     <button
                       type="button"
                       onClick={() => toggleFav(selected.id)}
@@ -2425,6 +2437,13 @@ export default function App() {
           <main className="mx-auto max-w-2xl px-4 pb-16 pt-4">
             {isEditing ? (
               <>
+                <div className="mb-5">
+                  <AiChangeBox
+                    getRecipe={() => fromDraft(editDraft)}
+                    onApply={(r) => setEditDraft((d) => ({ ...toDraft(r), baseServings: r.servings }))}
+                  />
+                </div>
+
                 <Field label="Title">
                   <input value={editDraft.title} onChange={(e) => setEditDraft((d) => ({ ...d, title: e.target.value }))} className={INPUT} />
                 </Field>
